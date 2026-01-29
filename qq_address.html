@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QQ Contacts</title>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    <style>
+        /* --- 基础设置 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background-color: #f2f2f6;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            display: flex; flex-direction: column; overflow: hidden;
+            -webkit-user-select: none; user-select: none;
+        }
+        ::-webkit-scrollbar { display: none; }
+
+        /* --- 顶部栏 (修复对齐版) --- */
+        .header {
+            height: 90px;
+            padding: 45px 20px 10px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            background: #f2f2f6; /* 通讯录背景 */
+            position: relative; /* 只要不是fixed覆盖，relative也行，但为了搜索栏不被挡住，这里通常不需要fixed，因为搜索栏是内容的一部分 */
+            flex-shrink: 0;
+            z-index: 100;
+        }
+        /* 标题绝对居中 */
+        .header-title-center {
+            position: absolute; left: 50%; top: 45px;
+            transform: translateX(-50%);
+            height: 40px; display: flex; align-items: center;
+            font-size: 18px; font-weight: bold; color: #333;
+            pointer-events: none;
+        }
+
+        .header-btn { width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 102; }
+        .icon { width: 24px; height: 24px; stroke: #333; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        .icon-exit { stroke: #007AFF; }
+
+        /* --- 搜索栏 --- */
+        .search-box { padding: 0 15px 10px 15px; background: #f2f2f6; flex-shrink: 0; }
+        .search-input-wrap {
+            background: #fff; border-radius: 8px; padding: 8px 10px; display: flex; align-items: center; gap: 8px;
+        }
+        .search-input { border: none; font-size: 14px; width: 100%; outline: none; background: transparent; }
+
+        /* --- 列表区域 --- */
+        .list-container {
+            flex: 1; overflow-y: auto; padding-bottom: 70px; position: relative;
+        }
+        
+        .group-title {
+            padding: 8px 15px; font-size: 12px; color: #888; background: #f2f2f6; font-weight: 600;
+        }
+        .contact-item {
+            display: flex; align-items: center; gap: 12px; padding: 12px 15px; background: #fff; border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s; position: relative;
+        }
+        .contact-item:active { background: #f5f5f5; }
+        .contact-avatar {
+            width: 40px; height: 40px; border-radius: 4px; background: #ddd; overflow: hidden; display: flex; justify-content: center; align-items: center;
+        }
+        .contact-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .bear-svg { width: 70%; height: 70%; fill: #fff; }
+        .contact-name { font-size: 16px; color: #333; font-weight: 500; }
+        .group-tag { font-size: 10px; background: #007AFF; color: white; padding: 1px 4px; border-radius: 4px; margin-left: 5px; }
+
+        /* --- 侧边字母栏 --- */
+        .index-bar {
+            position: fixed; top: 140px; right: 5px; bottom: 80px; width: 20px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-size: 10px; color: #555; z-index: 105;
+        }
+        .index-item { padding: 2px 0; font-weight: 600; }
+
+        /* --- 底部导航栏 --- */
+        .tab-bar {
+            height: 60px; width: 100%;
+            background: #f9f9f9; border-top: 1px solid #e0e0e0;
+            position: fixed; bottom: 0; left: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: space-around;
+            padding-bottom: 10px;
+        }
+        .tab-item {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 4px; color: #999; width: 33.33%; height: 100%; cursor: pointer;
+        }
+        .tab-item.active { color: #ffb7c5; }
+        .tab-icon { width: 28px; height: 28px; stroke-width: 2; }
+        .tab-text { font-size: 10px; font-weight: 600; }
+
+        /* --- 弹窗 --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); z-index: 500;
+            display: none; justify-content: center; align-items: center;
+            backdrop-filter: blur(4px);
+        }
+        .modal-card {
+            background: rgba(255,255,255,0.98); width: 80%; max-width: 300px;
+            border-radius: 20px; padding: 25px;
+            display: flex; flex-direction: column; gap: 15px; align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            animation: popIn 0.2s ease-out;
+        }
+        @keyframes popIn { from{transform:scale(0.9);opacity:0;} to{transform:scale(1);opacity:1;} }
+        .modal-title { font-size: 18px; font-weight: 600; color: #333; }
+        .modal-desc { font-size: 14px; color: #666; text-align: center; }
+        .modal-btns { display: flex; gap: 15px; width: 100%; }
+        .m-btn {
+            flex: 1; padding: 12px; border-radius: 12px; border: none; font-size: 15px; font-weight: 600; cursor: pointer;
+        }
+        .btn-cancel { background: #f2f2f6; color: #666; }
+        .btn-delete { background: #ffebeb; color: #FF3B30; }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-btn" onclick="exitToHome()">
+            <svg class="icon icon-exit" viewBox="0 0 24 24"><path d="M3 12h18M3 12l6-6m-6 6l6 6"/></svg>
+        </div>
+        <div class="header-title-center">通讯录</div>
+        <div class="header-btn" onclick="window.location.href='qq.html'"> 
+            <!-- 空占位或返回消息的按钮，现在因为标题绝对定位，这个按钮宽度不影响标题了 -->
+            <div style="width:24px;"></div>
+        </div>
+    </div>
+
+    <div class="search-box">
+        <div class="search-input-wrap">
+            <svg class="icon" style="width:16px;height:16px;stroke:#999;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索" oninput="handleSearch()">
+        </div>
+    </div>
+
+    <div class="list-container" id="contactList">
+        <!-- 动态生成 -->
+    </div>
+
+    <div class="index-bar" id="indexBar">
+        <!-- 动态生成 A-Z -->
+    </div>
+
+    <!-- 底部导航栏 -->
+    <div class="tab-bar">
+        <!-- 聊天按钮 -->
+        <div class="tab-item" onclick="window.location.href='qq.html'">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span class="tab-text">聊天</span>
+        </div>
+        
+        <!-- 通讯录按钮 (当前页，active) -->
+        <div class="tab-item active">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+            <span class="tab-text">通讯录</span>
+        </div>
+
+        <!-- 新增：我的按钮 -->
+        <div class="tab-item" onclick="window.location.href='qq_mine.html'">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span class="tab-text">我的</span>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal-card">
+            <div class="modal-title" style="color:#FF3B30">删除联系人</div>
+            <div class="modal-desc">确定要删除该好友及其聊天记录吗？此操作无法恢复。</div>
+            <div class="modal-btns">
+                <button class="m-btn btn-cancel" onclick="closeModal()">取消</button>
+                <button class="m-btn btn-delete" onclick="confirmDelete()">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DB_KEY = 'qq_app_data_pro_max_final';
+        const BEAR_SVG = `<svg viewBox="0 0 100 100" class="bear-svg"><circle cx="50" cy="50" r="50" fill="#f0f0f5"/><circle cx="20" cy="25" r="12" fill="#d1d1d6"/><circle cx="80" cy="25" r="12" fill="#d1d1d6"/><circle cx="50" cy="55" r="35" fill="#e5e5ea"/><circle cx="38" cy="50" r="4" fill="#8e8e93"/><circle cx="62" cy="50" r="4" fill="#8e8e93"/><ellipse cx="50" cy="65" rx="8" ry="6" fill="#fff"/><circle cx="50" cy="63" r="3" fill="#333"/></svg>`;
+        
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+        
+        let characters = [];
+        let deleteTargetId = null;
+
+        async function loadData() {
+            const stored = await dbGet(DB_KEY);
+            if (stored) {
+                try {
+                    // 兼容逻辑：如果是字符串则解析，如果是对象直接使用
+                    characters = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                } catch(e) {
+                    console.error("数据解析失败", e);
+                }
+            }
+            renderContacts();
+        }
+
+        function exitToHome() { try { window.parent.closeApp(); } catch(e){} }
+
+        // 获取中文拼音首字母 (修复版)
+        function getFirstLetter(str) {
+            if (!str) return '#';
+            const c = str.charAt(0);
+            
+            // 1. 如果本身就是字母，直接返回大写
+            if (/[a-zA-Z]/.test(c)) return c.toUpperCase();
+            
+            // 2. 汉字比对表 (按拼音顺序排列的边界字)
+            // 对应: A  B  C  D  E  F  G  H  J  K  L  M  N  O  P  Q  R  S  T  W  X  Y  Z
+            const zh = '阿八嚓哒额发噶哈击咔垃妈拿哦啪七然撒塌挖西雅匝';
+            const en = 'ABCDEFGHJKLMNOPQRSTWXYZ';
+            
+            // 3. 使用中文本地化排序进行比对
+            // 如果字符在 '阿' 之前，归类为 #
+            if (c.localeCompare('阿', 'zh') < 0) return '#';
+            // 如果字符在 '匝' 之后（包含匝），归类为 Z
+            if (c.localeCompare('匝', 'zh') >= 0) return 'Z';
+
+            // 4. 循环查找区间
+            for (let i = 0; i < zh.length - 1; i++) {
+                // 如果 c >= 当前字 且 c < 下一个字
+                if (c.localeCompare(zh[i], 'zh') >= 0 && c.localeCompare(zh[i+1], 'zh') < 0) {
+                    return en[i];
+                }
+            }
+            
+            return '#';
+        }
+
+        function renderContacts(filterText = '') {
+            const list = document.getElementById('contactList');
+            const indexBar = document.getElementById('indexBar');
+            list.innerHTML = '';
+            indexBar.innerHTML = '';
+
+            let displayList = characters.filter(c => c.name.toLowerCase().includes(filterText.toLowerCase()));
+            
+            let groups = {};
+            displayList.forEach(c => {
+                let letter = getFirstLetter(c.name);
+                if(!groups[letter]) groups[letter] = [];
+                groups[letter].push(c);
+            });
+
+            const sortedKeys = Object.keys(groups).sort();
+            if(sortedKeys.includes('#')) { 
+                sortedKeys.splice(sortedKeys.indexOf('#'), 1);
+                sortedKeys.push('#');
+            }
+
+            sortedKeys.forEach(key => {
+                const title = document.createElement('div');
+                title.className = 'group-title';
+                title.id = 'anchor-' + key;
+                title.innerText = key;
+                list.appendChild(title);
+
+                const idxItem = document.createElement('div');
+                idxItem.className = 'index-item';
+                idxItem.innerText = key;
+                idxItem.onclick = () => {
+                    document.getElementById('anchor-' + key).scrollIntoView({behavior: 'auto'});
+                };
+                indexBar.appendChild(idxItem);
+
+                groups[key].forEach(char => {
+                    const item = document.createElement('div');
+                    item.className = 'contact-item';
+                    
+                    let pressTimer;
+                    item.addEventListener('touchstart', (e) => {
+                        pressTimer = setTimeout(() => {
+                            askDelete(char.id);
+                        }, 600);
+                    });
+                    item.addEventListener('touchend', () => clearTimeout(pressTimer));
+                    item.addEventListener('touchmove', () => clearTimeout(pressTimer)); 
+
+                    item.onclick = () => {
+                        window.location.href = `chat_window.html?id=${char.id}`;
+                    };
+
+                    let avatarContent = char.avatar ? `<img src="${char.avatar}">` : BEAR_SVG;
+                    let groupTag = char.type === 'group' ? '<span class="group-tag">群聊</span>' : '';
+
+                    item.innerHTML = `
+                        <div class="contact-avatar">${avatarContent}</div>
+                        <div class="contact-name">${char.name}${groupTag}</div>
+                    `;
+                    list.appendChild(item);
+                });
+            });
+        }
+
+        function handleSearch() {
+            const val = document.getElementById('searchInput').value.trim();
+            renderContacts(val);
+        }
+
+        function askDelete(id) {
+            deleteTargetId = id;
+            document.getElementById('deleteModal').style.display = 'flex';
+        }
+        function closeModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+            deleteTargetId = null;
+        }
+        async function confirmDelete() {
+            if(deleteTargetId) {
+                characters = characters.filter(c => c.id !== deleteTargetId);
+                // 必须 stringify 存入，保持与 qq.html 格式一致
+                await dbSet(DB_KEY, JSON.stringify(characters));
+                renderContacts();
+                closeModal();
+            }
+        }
+
+        loadData();
+    </script>
+</body>
+</html>

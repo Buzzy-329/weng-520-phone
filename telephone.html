@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Connect Phone</title>
+    <style>
+        /* --- 1. 基础架构 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; user-select: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background: linear-gradient(180deg, #fff0f5 0%, #fff 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #333; overflow: hidden; position: relative;
+        }
+
+        /* --- 2. 顶部导航栏 --- */
+        .nav-bar {
+            padding: 50px 24px 15px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            background: rgba(255,255,255,0.85); backdrop-filter: blur(10px);
+            position: absolute; top:0; left:0; width:100%; z-index: 10;
+            border-bottom: 1px solid rgba(0,0,0,0.03);
+            height: 100px; /* 固定高度 */
+        }
+        .back-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; box-shadow: 0 4px 12px rgba(255, 182, 193, 0.2);
+            font-size: 18px; color: #888; transition: transform 0.2s;
+        }
+        .back-btn:active { transform: scale(0.9); }
+        .page-title { font-size: 18px; font-weight: 600; color: #7a6a6a; }
+        .header-right-btn { 
+            width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; 
+            font-size: 24px; color: #ffb7b2; cursor: pointer; 
+        }
+
+        /* --- 3. 底部标签栏 --- */
+        .tab-bar {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 80px;
+            background: #fff; border-top: 1px solid #f0f0f0;
+            display: flex; justify-content: space-around; align-items: center;
+            padding-bottom: 20px; z-index: 20;
+        }
+        .tab-item {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            color: #ccc; cursor: pointer; transition: color 0.3s;
+        }
+        .tab-item.active { color: #ffb7b2; }
+        .tab-icon { font-size: 24px; }
+        .tab-text { font-size: 10px; font-weight: bold; }
+
+        /* --- 4. 主内容可视区 --- */
+        .main-view {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            padding-top: 100px; padding-bottom: 80px; 
+            overflow-y: auto; display: none;
+            flex-direction: column;
+        }
+        .main-view.active { display: flex; }
+
+        /* --- 通讯录样式 --- */
+        /* 修改点：增加margin-top防止贴顶 */
+        .search-box {
+            margin: 20px 20px 10px 20px; padding: 12px 15px;
+            background: #fff; border-radius: 12px;
+            display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            flex-shrink: 0;
+        }
+        .search-input { border: none; background: transparent; font-size: 14px; width: 100%; color: #333; }
+        
+        .contact-list { flex: 1; overflow-y: auto; position: relative; }
+        .contact-list::-webkit-scrollbar { display: none; }
+        
+        .contact-row {
+            padding: 15px 20px; display: flex; align-items: center; gap: 15px;
+            background: #fff; border-bottom: 1px solid #f9f9f9;
+            transition: background 0.2s; position: relative; overflow: hidden;
+        }
+        .contact-row:active { background: #fff0f5; }
+        .contact-avatar {
+            width: 44px; height: 44px; border-radius: 50%; background: #eee;
+            object-fit: cover; border: 1px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .contact-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+        .contact-name { font-size: 16px; font-weight: 600; color: #333; }
+        .contact-phone { font-size: 12px; color: #999; }
+        .contact-group-title {
+            padding: 5px 20px;
+            background: #f4f4f4;
+            color: #888;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .contact-index { 
+            position: fixed; right: 5px; top: 130px; bottom: 90px; width: 20px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-size: 10px; color: #ffb7b2; font-weight: bold; gap: 2px;
+        }
+
+         /* --- 拨号键盘样式 (默认页) --- */
+        #tab-keypad {
+            background: #ffe4e1; /* 淡粉色背景 */
+            padding-top: 100px; /* 【修改点】改为100px，给顶部导航栏留位置 */
+            /* z-index: 15; 【修改点】删掉这一行或者注释掉，不要遮挡导航栏 */
+            justify-content: flex-end; /* 内容靠下 */
+            padding-bottom: 100px;
+        }
+        
+        /* 闪烁星星动画 */
+        .star-hollow {
+             position: absolute; color: #fff; font-size: 20px; opacity: 0.8;
+             animation: twinkle 2s infinite ease-in-out; pointer-events: none;
+        }
+        @keyframes twinkle { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
+
+        .dial-display {
+            height: 80px; display: flex; justify-content: center; align-items: center;
+            font-size: 36px; font-weight: 500; color: #333; letter-spacing: 2px;
+            padding: 0 40px; white-space: nowrap; overflow: hidden; margin-bottom: 20px; z-index: 2;
+        }
+        
+        .keypad-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 20px 30px; padding: 0 50px; justify-items: center; z-index: 2;
+        }
+        
+        .dial-btn {
+            width: 70px; height: 70px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6); 
+            backdrop-filter: blur(5px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            cursor: pointer; transition: background 0.2s;
+            box-shadow: 0 4px 10px rgba(255, 255, 255, 0.4);
+        }
+        .dial-btn:active { background: rgba(255,255,255,0.9); }
+        .dial-num { font-size: 28px; font-weight: 400; color: #333; line-height: 1; }
+        .dial-sub { font-size: 10px; color: #666; font-weight: 600; letter-spacing: 1px; }
+        
+        .action-area {
+            margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 40px; z-index: 2;
+        }
+        /* 修改点：修复图标成一坨的问题，使用SVG */
+        .call-btn {
+            width: 70px; height: 70px; border-radius: 50%;
+            background: #4cd964; /* 绿色 */
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 5px 15px rgba(76, 217, 100, 0.4);
+            cursor: pointer;
+        }
+        .call-btn svg { width: 32px; height: 32px; fill: white; }
+        
+        .del-btn {
+            width: 50px; height: 50px; display: flex; justify-content: center; align-items: center;
+            color: #666; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+            font-size: 24px;
+        }
+
+        /* --- 最近通话 (Recents) --- */
+        .recents-list { padding: 10px 20px; }
+        .recent-item {
+            padding: 15px 0; border-bottom: 1px solid #eee;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .recent-main { display: flex; flex-direction: column; gap: 4px; }
+        .recent-name { font-size: 16px; font-weight: 600; color: #333; } 
+        .recent-info { font-size: 12px; color: #888; display: flex; align-items: center; gap: 5px; }
+        .recent-time { font-size: 14px; color: #aaa; }
+
+        /* --- 通话中界面 (Overlay) --- */
+        .call-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #2c3e50 0%, #000 100%); 
+            z-index: 100; display: none; flex-direction: column; align-items: center;
+            padding-top: 80px; padding-bottom: 40px; color: #fff;
+            transition: opacity 0.5s;
+        }
+        .call-avatar-box {
+            width: 120px; height: 120px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.2);
+            padding: 4px; position: relative;
+        }
+        .call-avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .call-status { margin-top: 20px; font-size: 14px; color: rgba(255,255,255,0.7); letter-spacing: 1px; }
+        .call-timer { margin-top: 5px; font-size: 32px; font-weight: 300; font-variant-numeric: tabular-nums; }
+        
+        .chat-scroll-area { 
+            flex: 1; width: 100%; margin: 30px 0; padding: 0 24px;
+            overflow-y: scroll; scrollbar-width: none; 
+            display: flex; flex-direction: column; gap: 15px; 
+            mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+            -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+        }
+        .chat-scroll-area::-webkit-scrollbar { display: none; }
+
+        .call-msg { font-size: 15px; line-height: 1.5; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        .call-msg.them { color: #fff; text-align: left; }
+        .call-msg.me { color: #a9fdac; text-align: right; }
+        
+        .call-controls { width: 100%; padding: 0 40px; display: flex; flex-direction: column; gap: 20px; align-items: center; }
+        .speech-input {
+            width: 100%; padding: 12px 20px; border-radius: 25px; border: none;
+            background: rgba(255,255,255,0.15); color: #fff; font-size: 15px;
+            backdrop-filter: blur(5px); transition: background 0.3s;
+        }
+        .speech-input:focus { background: rgba(255,255,255,0.25); }
+        .hangup-btn {
+            width: 70px; height: 70px; border-radius: 50%; background: #ff3b30;
+            display: flex; justify-content: center; align-items: center; cursor: pointer;
+            box-shadow: 0 5px 20px rgba(255, 59, 48, 0.4);
+        }
+        .loading-dots:after { content: '.'; animation: dots 1.5s steps(5, end) infinite; }
+        @keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60% { content: '...'; } 80%, 100% { content: ''; } }
+
+        /* --- 弹窗 (Modals) --- */
+        .modal-mask {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+            z-index: 200; display: none; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .modal-mask.show { opacity: 1; }
+        .modal-body {
+            background: #fff; width: 85%; max-width: 320px;
+            border-radius: 24px; padding: 25px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            display: flex; flex-direction: column; gap: 15px;
+            transform: scale(0.9); transition: transform 0.3s;
+        }
+        .modal-mask.show .modal-body { transform: scale(1); }
+        
+        .modal-title { font-size: 18px; font-weight: 600; text-align: center; color: #333; margin-bottom: 5px; }
+        .modal-desc { font-size: 13px; color: #888; text-align: center; line-height: 1.4; }
+        
+        .m-input-group { display: flex; flex-direction: column; gap: 5px; }
+        .m-label { font-size: 11px; color: #ffb7b2; font-weight: bold; margin-left: 5px; }
+        .m-input {
+            width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #f0f0f0;
+            background: #fafafa; font-size: 14px; color: #555;
+        }
+        
+        .m-btns { display: flex; gap: 10px; margin-top: 10px; }
+        .m-btn {
+            flex: 1; padding: 12px; border-radius: 14px; border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+        }
+        .btn-cancel { background: #f5f5f5; color: #999; }
+        .btn-confirm { background: #ffb7b2; color: #fff; }
+        .btn-delete { background: #ffebeb; color: #ff6b6b; }
+
+        /* 列表选择列表 */
+        .select-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .select-item { 
+            padding: 10px; background: #f9f9f9; border-radius: 10px; 
+            display: flex; align-items: center; gap: 10px; cursor: pointer;
+        }
+        .select-item.disabled { opacity: 0.5; pointer-events: none; filter: grayscale(1); }
+        .select-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 10px 20px;
+            border-radius: 20px; font-size: 13px; opacity: 0; pointer-events: none;
+            transition: opacity 0.3s; z-index: 300;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部导航 (通讯录/最近通话用) -->
+    <div class="nav-bar" id="navBar">
+        <div class="back-btn" onclick="exitApp()">←</div>
+        <div class="page-title" id="pageTitle">电话</div>
+        <!-- 右上角按钮，JS控制功能 -->
+        <div class="header-right-btn" id="headerRightBtn"></div>
+    </div>
+
+    <!-- 1. 通讯录界面 -->
+    <div class="main-view" id="tab-contacts">
+        <div class="search-box">
+            <span>🔍</span>
+            <input type="text" class="search-input" placeholder="查找联系人" oninput="renderContacts(this.value)">
+        </div>
+        <div class="contact-list" id="contactListEl">
+            <!-- 列表 JS 生成 -->
+        </div>
+        <div class="contact-index" id="alphaIndex">
+            <!-- 字母索引 -->
+        </div>
+    </div>
+
+    <!-- 2. 拨号键盘界面 -->
+    <div class="main-view active" id="tab-keypad">
+        <div id="starContainer"></div> <!-- 星星容器 -->
+        
+        <div class="dial-display" id="dialDisplay"></div>
+        
+        <div class="keypad-grid">
+            <div class="dial-btn" onclick="pressKey('1')"><div class="dial-num">1</div><div class="dial-sub">&nbsp;</div></div>
+            <div class="dial-btn" onclick="pressKey('2')"><div class="dial-num">2</div><div class="dial-sub">ABC</div></div>
+            <div class="dial-btn" onclick="pressKey('3')"><div class="dial-num">3</div><div class="dial-sub">DEF</div></div>
+            <div class="dial-btn" onclick="pressKey('4')"><div class="dial-num">4</div><div class="dial-sub">GHI</div></div>
+            <div class="dial-btn" onclick="pressKey('5')"><div class="dial-num">5</div><div class="dial-sub">JKL</div></div>
+            <div class="dial-btn" onclick="pressKey('6')"><div class="dial-num">6</div><div class="dial-sub">MNO</div></div>
+            <div class="dial-btn" onclick="pressKey('7')"><div class="dial-num">7</div><div class="dial-sub">PQRS</div></div>
+            <div class="dial-btn" onclick="pressKey('8')"><div class="dial-num">8</div><div class="dial-sub">TUV</div></div>
+            <div class="dial-btn" onclick="pressKey('9')"><div class="dial-num">9</div><div class="dial-sub">WXYZ</div></div>
+            <div class="dial-btn" onclick="pressKey('*')"><div class="dial-num" style="padding-top:10px">*</div></div>
+            <div class="dial-btn" onclick="pressKey('0')"><div class="dial-num">0</div><div class="dial-sub">+</div></div>
+            <div class="dial-btn" onclick="pressKey('#')"><div class="dial-num" style="padding-top:10px">#</div></div>
+        </div>
+
+        <div class="action-area">
+            <div style="width:50px"></div>
+            <div class="call-btn" onclick="tryCall()">
+                <!-- 修正后的通话图标SVG -->
+                <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            </div>
+            <div class="del-btn" id="delBtn" onclick="deleteKey()">⌫</div>
+        </div>
+    </div>
+
+    <!-- 3. 最近通话界面 -->
+    <div class="main-view" id="tab-recents">
+        <div class="recents-list" id="recentsListEl">
+            <!-- 列表 JS 生成 -->
+        </div>
+    </div>
+
+    <!-- 底部 Tab -->
+    <div class="tab-bar">
+        <div class="tab-item" onclick="switchTab('contacts')">
+            <span class="tab-icon">📖</span><span class="tab-text">通讯录</span>
+        </div>
+        <div class="tab-item active" onclick="switchTab('keypad')">
+            <span class="tab-icon">⌨️</span><span class="tab-text">拨号</span>
+        </div>
+        <div class="tab-item" onclick="switchTab('recents')">
+            <span class="tab-icon">🕒</span><span class="tab-text">最近通话</span>
+        </div>
+    </div>
+
+    <!-- 通话 Overlay -->
+    <div class="call-overlay" id="callOverlay">
+        <div class="call-avatar-box">
+            <img id="callAvatar" src="" class="call-avatar-img">
+        </div>
+        <div class="call-status" id="callStatus">正在呼叫...</div>
+        <div class="call-timer" id="callTimer">--:--</div>
+        
+        <div class="chat-scroll-area" id="callChatArea"></div>
+
+        <div class="call-controls">
+            <input type="text" class="speech-input" id="speechInput" placeholder="输入说话..." autocomplete="off">
+            <div class="hangup-btn" onclick="endCall()">
+                <!-- 挂断图标 -->
+                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(135deg);"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 1: 选择 QQ 角色 -->
+    <div class="modal-mask" id="selectCharModal">
+        <div class="modal-body">
+            <div class="modal-title">添加到通讯录</div>
+            <div class="select-list" id="qqCharList"></div>
+            <div class="m-btns"><button class="m-btn btn-cancel" onclick="closeModal('selectCharModal')">取消</button></div>
+        </div>
+    </div>
+
+    <!-- 弹窗 2: 编辑/添加详情 -->
+    <div class="modal-mask" id="editContactModal">
+        <div class="modal-body">
+            <div class="modal-title" id="editModalTitle">添加联系人</div>
+            <div class="m-input-group">
+                <span class="m-label">备注名</span>
+                <input type="text" class="m-input" id="editName">
+            </div>
+            <div class="m-input-group">
+                <span class="m-label">电话号码 (数字)</span>
+                <input type="tel" class="m-input" id="editPhone" maxlength="11">
+            </div>
+            <div class="m-input-group">
+                <span class="m-label">铃声 URL (可选)</span>
+                <input type="text" class="m-input" id="editRingtone" placeholder="http://...">
+            </div>
+            <div class="m-btns">
+                <button class="m-btn btn-cancel" onclick="closeModal('editContactModal')">取消</button>
+                <button class="m-btn btn-confirm" onclick="saveContact()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 3: 归档记忆中 -->
+    <div class="modal-mask" id="archivingModal">
+        <div class="modal-body">
+            <div class="modal-title">通话结束</div>
+            <div class="modal-desc">
+                正在归档记忆到记忆库<span class="loading-dots"></span><br>
+                请勿关闭...
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 4: 无用户警告 -->
+    <div class="modal-mask" id="alertModal">
+        <div class="modal-body">
+            <div class="modal-title">提示</div>
+            <div class="modal-desc" id="alertMsg">用户不存在</div>
+            <div class="m-btns"><button class="m-btn btn-confirm" onclick="closeModal('alertModal')">知道了</button></div>
+        </div>
+    </div>
+
+    <!-- 弹窗 5: 确认清空最近通话 -->
+    <div class="modal-mask" id="confirmClearModal">
+        <div class="modal-body">
+            <div class="modal-title">清空记录</div>
+            <div class="modal-desc">确定要清空所有最近通话记录吗？</div>
+            <div class="m-btns">
+                <button class="m-btn btn-cancel" onclick="closeModal('confirmClearModal')">取消</button>
+                <button class="m-btn btn-delete" onclick="doClearRecents()">清空</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 6: 删除/修改联系人 -->
+    <div class="modal-mask" id="contactOptionModal">
+        <div class="modal-body">
+            <div class="modal-title" id="optContactName">选项</div>
+            <div class="m-btns" style="flex-direction: column;">
+                <button class="m-btn btn-confirm" onclick="openModifyContact()">修改资料</button>
+                <button class="m-btn btn-delete" onclick="deleteContact()">删除联系人</button>
+                <button class="m-btn btn-cancel" onclick="closeModal('contactOptionModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增：确认删除联系人弹窗 -->
+    <div class="modal-mask" id="confirmDelContactModal">
+        <div class="modal-body">
+            <div class="modal-title">删除联系人</div>
+            <div class="modal-desc">确定要删除这个联系人吗？</div>
+            <div class="m-btns">
+                <button class="m-btn btn-cancel" onclick="closeModal('confirmDelContactModal')">取消</button>
+                <button class="m-btn btn-delete" onclick="doRealDeleteContact()">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">提示信息</div>
+    <audio id="ringtoneAudio" loop></audio>
+
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    
+    <script>
+        // --- 核心：数据库连接工具 ---
+        const phoneChannel = new BroadcastChannel('buzzy_sync_channel');
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+        // --- 核心数据KEY ---
+        const DB_QQ_KEY = 'qq_app_data_pro_max_final'; // QQ角色数据源
+        const DB_WB_KEY = 'wb_books'; // 世界书数据源
+        const DB_PHONE_CONTACTS = 'phone_contacts'; // 本地存储：通讯录
+        const DB_PHONE_RECENTS = 'phone_recents'; // 本地存储：通话记录
+        const API_KEY_STORAGE = 'aiPhone_presets';
+        const API_ID_STORAGE = 'aiPhone_currentId';
+
+        let contacts = []; 
+        let recents = []; 
+        let dialNumber = "";
+        
+        let currentTab = 'keypad';
+        let selectedContactId = null;
+
+        // 通话状态对象
+        let activeCall = null; 
+
+        // --- 汉字转拼音首字母辅助函数 ---
+        function getPyFirstLetter(str) {
+            if (!str || typeof str !== 'string') return '#';
+            const c = str.charAt(0);
+            // 如果是英文，直接返回大写
+            if (/[a-zA-Z]/.test(c)) return c.toUpperCase();
+            // 如果是中文，利用 localeCompare 边界字符判断
+            const zh = "阿八嚓哒蛾发噶哈击咔垃妈拿哦啪期然撒塌挖昔压匝".split('');
+            const en = "ABCDEFGHJKLMNOPQRSTWXYZ".split('');
+            if (c.localeCompare('阿', 'zh') < 0) return '#';
+            if (c.localeCompare('匝', 'zh') > 0) return 'Z';
+            
+            for (let i = 0; i < zh.length; i++) {
+                if (c.localeCompare(zh[i], 'zh') === 0) return en[i];
+                if (c.localeCompare(zh[i], 'zh') < 0) return en[i - 1];
+            }
+            return '#';
+        }
+        
+        // --- 初始化 ---
+        window.onload = async function() {
+            await loadData();
+            createStars();
+            switchTab('keypad'); 
+            
+            // 回车发送
+            document.getElementById('speechInput').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') handleUserSpeak();
+            });
+        };
+
+        function exitApp() {
+            if(window.parent && window.parent.closeApp) window.parent.closeApp();
+            else history.back();
+        }
+
+        // --- 数据加载 ---
+        async function loadData() {
+            // 读取通讯录
+            const cRaw = await dbGet(DB_PHONE_CONTACTS);
+            contacts = (typeof cRaw === 'string') ? JSON.parse(cRaw) : (cRaw || []);
+            
+            // 读取通话记录
+            const rRaw = await dbGet(DB_PHONE_RECENTS);
+            recents = (typeof rRaw === 'string') ? JSON.parse(rRaw) : (rRaw || []);
+        }
+
+        async function saveData() {
+            // 转为字符串保存，保持格式统一
+            await dbSet(DB_PHONE_CONTACTS, JSON.stringify(contacts));
+            await dbSet(DB_PHONE_RECENTS, JSON.stringify(recents));
+        }
+
+        // --- UI 生成: 背景星星 ---
+        function createStars() {
+            const container = document.getElementById('starContainer');
+            for(let i=0; i<15; i++) {
+                const star = document.createElement('div');
+                star.className = 'star-hollow';
+                star.innerHTML = '☆'; 
+                star.style.left = Math.random() * 90 + '%';
+                star.style.top = Math.random() * 80 + '%';
+                const scale = 0.5 + Math.random();
+                star.style.fontSize = (20 * scale) + 'px';
+                star.style.animationDelay = (Math.random() * 2) + 's';
+                container.appendChild(star);
+            }
+        }
+
+        // --- 标签切换逻辑 ---
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+            const items = document.querySelectorAll('.tab-item');
+            
+            if(tab === 'contacts') items[0].classList.add('active');
+            if(tab === 'keypad') items[1].classList.add('active');
+            if(tab === 'recents') items[2].classList.add('active');
+
+            document.querySelectorAll('.main-view').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+
+            const navBar = document.getElementById('navBar');
+            const pageTitle = document.getElementById('pageTitle');
+            const rightBtn = document.getElementById('headerRightBtn');
+
+            // 修改点：所有界面都显示顶部栏，统一风格
+            navBar.style.display = 'flex';
+            rightBtn.onclick = null; // 重置点击事件
+            rightBtn.innerText = '';
+
+            if(tab === 'contacts') {
+                pageTitle.innerText = '通讯录';
+                rightBtn.innerText = '+'; 
+                rightBtn.style.fontSize = '24px';
+                rightBtn.onclick = openSelectCharModal; 
+                renderContacts(); // 每次切换回来刷新列表
+            } else if(tab === 'recents') {
+                pageTitle.innerText = '最近通话';
+                rightBtn.innerText = '🗑️'; 
+                rightBtn.style.fontSize = '18px';
+                rightBtn.onclick = () => openModal('confirmClearModal'); 
+                renderRecents();
+            } else if(tab === 'keypad') {
+                pageTitle.innerText = '拨号键盘';
+                // 拨号页右上角如果不需要功能，可以留空，或者加个设置
+            }
+        }
+
+        // --- 通讯录逻辑 ---
+        function renderContacts(filter='') {
+            const list = document.getElementById('contactListEl');
+            const indexEl = document.getElementById('alphaIndex');
+            list.innerHTML = ''; indexEl.innerHTML = '';
+            
+            // 1. 过滤
+            let displayList = contacts.filter(c => {
+                if(!filter) return true;
+                const f = filter.toLowerCase();
+                return c.name.toLowerCase().includes(f) || c.phone.includes(f);
+            });
+
+            // 2. 排序 (利用中文 localeCompare 排序，让“程”排在“常”后面等)
+            displayList.sort((a,b) => a.name.localeCompare(b.name, 'zh-CN'));
+
+            // 3. 生成右侧索引条
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#";
+            for(let char of chars) {
+                let s = document.createElement('div');
+                s.innerText = char;
+                indexEl.appendChild(s);
+            }
+
+            // 4. 分组渲染 (使用新的 getPyFirstLetter 函数)
+            let currentGroup = '';
+            
+            displayList.forEach(c => {
+                // 【修改点】这里调用刚才添加的函数，程 -> C
+                let firstChar = getPyFirstLetter(c.name);
+
+                // 如果当前首字母和上一个不一样，且不在搜索模式下，则添加分组头
+                if (firstChar !== currentGroup && !filter) {
+                    currentGroup = firstChar;
+                    const groupTitle = document.createElement('div');
+                    groupTitle.className = 'contact-group-title';
+                    groupTitle.innerText = currentGroup;
+                    list.appendChild(groupTitle);
+                }
+
+                const div = document.createElement('div');
+                div.className = 'contact-row';
+                div.innerHTML = `
+                    <img src="${c.avatar || ''}" class="contact-avatar">
+                    <div class="contact-info">
+                        <div class="contact-name">${c.name}</div>
+                        <div class="contact-phone">${c.phone}</div>
+                    </div>
+                    <div style="color:#ddd; font-size:18px;">ⓘ</div> 
+                `;
+                div.onclick = () => openContactOptions(c);
+                list.appendChild(div);
+            });
+        }
+
+        // 添加流程：从QQ调取
+        async function openSelectCharModal() {
+            const raw = await dbGet(DB_QQ_KEY);
+            const qqData = (typeof raw === 'string') ? JSON.parse(raw) : (raw || []);
+            const list = document.getElementById('qqCharList');
+            list.innerHTML = '';
+            
+            qqData.forEach(q => {
+                if(q.type === 'group') return; 
+                // 检查是否已经在通讯录
+                const exists = contacts.find(c => c.id === q.id);
+                
+                const div = document.createElement('div');
+                div.className = `select-item ${exists ? 'disabled' : ''}`;
+                div.innerHTML = `
+                    <img src="${q.avatar||''}" class="select-avatar">
+                    <span>${q.name}</span>
+                    ${exists ? '<span style="font-size:10px;color:#999;margin-left:auto;">已添加</span>' : ''}
+                `;
+                if(!exists) {
+                    div.onclick = () => {
+                        closeModal('selectCharModal');
+                        openEditContact(q);
+                    };
+                }
+                list.appendChild(div);
+            });
+            openModal('selectCharModal');
+        }
+
+        function openEditContact(qqChar) {
+            selectedContactId = qqChar.id; 
+            document.getElementById('editModalTitle').innerText = '添加联系人';
+            document.getElementById('editName').value = qqChar.name;
+            document.getElementById('editPhone').value = '';
+            document.getElementById('editRingtone').value = '';
+            document.getElementById('editName').dataset.avatar = qqChar.avatar || '';
+            openModal('editContactModal');
+        }
+
+        function openModifyContact() {
+            closeModal('contactOptionModal');
+            const c = contacts.find(x => x.id === selectedContactId);
+            if(!c) return;
+            document.getElementById('editModalTitle').innerText = '修改资料';
+            document.getElementById('editName').value = c.name;
+            document.getElementById('editName').dataset.avatar = c.avatar;
+            document.getElementById('editPhone').value = c.phone;
+            document.getElementById('editRingtone').value = c.ringtone || '';
+            openModal('editContactModal');
+        }
+
+        function saveContact() {
+            const name = document.getElementById('editName').value.trim();
+            const phone = document.getElementById('editPhone').value.trim();
+            const ringtone = document.getElementById('editRingtone').value.trim();
+            const avatar = document.getElementById('editName').dataset.avatar;
+
+            if(!name || !phone) { showToast('请填写姓名和号码'); return; }
+
+            const existingIndex = contacts.findIndex(c => c.id === selectedContactId);
+            const newContact = { id: selectedContactId, name, phone, ringtone, avatar };
+
+            if(existingIndex >= 0) contacts[existingIndex] = newContact;
+            else contacts.push(newContact);
+            
+            saveData();
+            renderContacts();
+            closeModal('editContactModal');
+        }
+
+        function openContactOptions(c) {
+            selectedContactId = c.id;
+            document.getElementById('optContactName').innerText = c.name;
+            // 打开包含修改/删除按钮的弹窗
+            openModal('contactOptionModal');
+        }
+
+        // 点击“删除联系人”按钮，只负责弹窗询问
+        function deleteContact() {
+            closeModal('contactOptionModal'); // 关闭上级菜单
+            setTimeout(() => {
+                openModal('confirmDelContactModal'); // 打开确认删除弹窗
+            }, 300);
+        }
+
+        // 真正的删除逻辑 (在确认弹窗点确定后执行)
+        function doRealDeleteContact() {
+            contacts = contacts.filter(c => c.id !== selectedContactId);
+            saveData();
+            renderContacts(); // 刷新列表，被删除的人会自动从列表中消失
+            
+            // QQ列表那边是通过判断 contacts 里有没有 id 来决定是否变灰的
+            // 所以删除了这里，那边自动就会变回可添加状态
+            
+            closeModal('confirmDelContactModal');
+            showToast('联系人已删除');
+        }
+
+        // --- 拨号逻辑 ---
+        function pressKey(key) {
+            if(dialNumber.length < 15) dialNumber += key;
+            updateDialDisplay();
+        }
+        function deleteKey() {
+            dialNumber = dialNumber.slice(0, -1);
+            updateDialDisplay();
+        }
+        function updateDialDisplay() {
+            document.getElementById('dialDisplay').innerText = dialNumber;
+            document.getElementById('delBtn').style.opacity = dialNumber.length > 0 ? 1 : 0;
+            document.getElementById('delBtn').style.pointerEvents = dialNumber.length > 0 ? 'auto' : 'none';
+        }
+
+        function tryCall() {
+            if(!dialNumber) return;
+            const target = contacts.find(c => c.phone === dialNumber);
+            if(target) {
+                startCall(target);
+            } else {
+                document.getElementById('alertMsg').innerText = "用户不存在";
+                openModal('alertModal');
+            }
+        }
+
+        // --- 通话核心逻辑 (Strict No-OOC) ---
+        async function startCall(contact) {
+            document.getElementById('callOverlay').style.display = 'flex';
+            document.getElementById('callStatus').innerText = "正在接通...";
+            document.getElementById('callTimer').innerText = "--:--";
+            document.getElementById('callAvatar').src = contact.avatar || '';
+            document.getElementById('callChatArea').innerHTML = ''; 
+            
+            if(contact.ringtone) {
+                const audio = document.getElementById('ringtoneAudio');
+                audio.src = contact.ringtone;
+                try { audio.play(); } catch(e){}
+            }
+
+            // 【关键逻辑】从 QQ 数据源获取人设和世界书
+            const rawQQ = await dbGet(DB_QQ_KEY);
+            const qqData = (typeof rawQQ === 'string') ? JSON.parse(rawQQ) : (rawQQ || []);
+            
+            const charData = qqData.find(q => q.id === contact.id);
+            if(!charData) { endCall(); return; } 
+
+            // 处理世界书
+            let wbContent = "";
+            let activeBookIds = charData.worldBookIds || [];
+            // 兼容单选
+            if (charData.worldBookId && !activeBookIds.includes(charData.worldBookId)) {
+                activeBookIds.push(charData.worldBookId);
+            }
+
+            if(activeBookIds.length > 0) {
+                 const rawWB = await dbGet(DB_WB_KEY);
+                 const allBooks = (typeof rawWB === 'string') ? JSON.parse(rawWB) : (rawWB || []);
+                 // 找到所有ID匹配的书籍内容
+                 const relBooks = allBooks.filter(b => activeBookIds.includes(b.id));
+                 wbContent = relBooks.map(b => `[World Info: ${b.name}]\n${b.content}`).join('\n\n');
+            }
+
+            activeCall = {
+                charId: contact.id,
+                startTime: 0,
+                timerInterval: null,
+                chatHistory: [], 
+                persona: charData.persona || "Default Persona",
+                worldBook: wbContent,
+                charName: charData.name,
+                userNick: charData.userNickName || "User",
+                userPersona: charData.userPersona || ""
+            };
+
+            // 第一句Prompt，严格遵守OOC要求
+            const systemPrompt = `
+[SYSTEM INSTRUCTION]
+You are acting as the character "${activeCall.charName}" in a phone call with "${activeCall.userNick}".
+Current Date/Time: ${new Date().toLocaleString()}.
+
+[CHARACTER SETTINGS]
+Name: ${activeCall.charName}
+Persona: ${activeCall.persona}
+World Context:
+${activeCall.worldBook}
+
+[USER INFO]
+Name: ${activeCall.userNick}
+Persona: ${activeCall.userPersona}
+
+[CALL RULES]
+1. This is a VOICE CALL. Do NOT describe physical actions (like *waves hand*).
+2. REQUIRED: Describe sounds in brackets using CHINESE, e.g. (轻笑), (沉默), (打字声), (背景噪音).
+3. Dialogue MUST be enclosed in double quotes "".
+4. NO OOC (Out Of Character). Stay strictly within the persona.
+5. Language: Speak in the character's native language (mostly Chinese).
+6. Provide the FIRST SENTENCE to start the call.
+            `;
+
+            try {
+                // 接通前等待
+                const firstMsg = await callLLM([{role: "system", content: systemPrompt}]);
+                
+                stopRingtone();
+                
+                activeCall.startTime = Date.now();
+                activeCall.timerInterval = setInterval(updateCallTimer, 1000);
+                updateCallTimer();
+                
+                appendCallMsg(activeCall.charName, firstMsg, 'them');
+                activeCall.chatHistory.push({role: "assistant", content: firstMsg});
+
+            } catch(e) {
+                console.error(e);
+                stopRingtone();
+                document.getElementById('callStatus').innerText = "接通失败";
+                setTimeout(closeCallOverlay, 2000);
+            }
+        }
+
+        async function handleUserSpeak() {
+            const input = document.getElementById('speechInput');
+            const text = input.value.trim();
+            if(!text || !activeCall) return;
+
+            appendCallMsg("Me", text, 'me');
+            activeCall.chatHistory.push({role: "user", content: text});
+            input.value = '';
+
+            // 思考状态 UI
+            const loadingId = appendCallMsg(activeCall.charName, "对方正在思考...", 'them', true);
+
+            // 持续对话 Prompt
+            const systemPrompt = `
+[CONTINUE CALL]
+Character: ${activeCall.charName}
+Persona: ${activeCall.persona}
+World Book: ${activeCall.worldBook}
+
+[STRICT RULES]
+1. NO OOC. Strictly follow the character's personality.
+2. Output ONLY the dialogue in double quotes "".
+3. Describe sounds in brackets () using CHINESE (e.g. (叹气)).
+4. NO physical actions.
+            `;
+
+            const messages = [
+                {role: "system", content: systemPrompt},
+                ...activeCall.chatHistory
+            ];
+
+            try {
+                const reply = await callLLM(messages);
+                const loader = document.getElementById(loadingId);
+                if(loader) loader.remove();
+                
+                appendCallMsg(activeCall.charName, reply, 'them');
+                activeCall.chatHistory.push({role: "assistant", content: reply});
+            } catch(e) {
+                const loader = document.getElementById(loadingId);
+                if(loader) loader.innerText = "(信号中断)";
+            }
+        }
+
+        // --- 挂断与记忆归档 ---
+        async function endCall() {
+            const savedCharId = activeCall ? activeCall.charId : null; // 【新增】先备份ID，防止后面activeCall变空
+            if(!activeCall) { closeCallOverlay(); return; }
+
+            clearInterval(activeCall.timerInterval);
+            stopRingtone();
+
+            // 记录到最近通话
+            const durationSec = Math.floor((Date.now() - activeCall.startTime) / 1000);
+            recents.unshift({
+                name: activeCall.charName,
+                duration: formatTime(durationSec),
+                subDate: new Date().toLocaleString(),
+                avatar: document.getElementById('callAvatar').src
+            });
+            saveData();
+            if(currentTab === 'recents') renderRecents();
+
+            // 显示归档弹窗
+            openModal('archivingModal');
+
+            // 总结并保存记忆
+            if(activeCall.chatHistory.length > 1) {
+                try {
+                    const summaryPrompt = `
+任务：总结本次电话通话内容，作为角色的长期记忆。
+角色：${activeCall.charName}
+对话内容：
+${activeCall.chatHistory.map(m => m.role + ": " + m.content).join('\n')}
+
+要求：
+1. 包含时间、人物、核心事件。
+2. 简洁（200字以内）。
+3. 语气客观。
+                    `;
+    
+                    const summary = await callLLM([
+                        {role: "system", content: "You are a memory archiver."},
+                        {role: "user", content: summaryPrompt}
+                    ]);
+    
+                    const finalMemory = `[电话记忆 ${new Date().toLocaleString()}] ${summary}`;
+    
+                    // 写入 QQ 数据库 (char_detail.html的数据源)
+                    const rawQQ = await dbGet(DB_QQ_KEY);
+                    const qqData = (typeof rawQQ === 'string') ? JSON.parse(rawQQ) : (rawQQ || []);
+                    
+                    const targetIdx = qqData.findIndex(q => q.id === savedCharId);
+                    if(targetIdx !== -1) {
+                        if(!qqData[targetIdx].longTermMemories) qqData[targetIdx].longTermMemories = [];
+                        qqData[targetIdx].longTermMemories.push(finalMemory);
+                        // 存回数据库
+                        await dbSet(DB_QQ_KEY, JSON.stringify(qqData));
+                        phoneChannel.postMessage({ type: 'refresh_list' });
+                    }
+    
+                } catch(e) {
+                    console.error("Summary failed", e);
+                    showToast("归档失败: " + (e.message || "未知错误")); 
+                }
+            }
+
+            setTimeout(() => {
+                closeModal('archivingModal');
+                closeCallOverlay();
+                activeCall = null;
+            }, 1500); 
+        }
+
+        // --- 辅助功能 ---
+        function stopRingtone() {
+            const audio = document.getElementById('ringtoneAudio');
+            audio.pause(); audio.currentTime = 0;
+        }
+
+        function updateCallTimer() {
+            if(!activeCall || !activeCall.startTime) return;
+            const diff = Math.floor((Date.now() - activeCall.startTime) / 1000);
+            document.getElementById('callTimer').innerText = formatTime(diff);
+        }
+
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60).toString().padStart(2, '0');
+            const s = (sec % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function appendCallMsg(name, text, side, isLoading=false) {
+            const area = document.getElementById('callChatArea');
+            const div = document.createElement('div');
+            div.className = `call-msg ${side}`;
+            div.innerText = text; 
+            if(isLoading) div.id = 'msg-loading-' + Date.now();
+            area.appendChild(div);
+            area.scrollTop = area.scrollHeight;
+            return div.id;
+        }
+        
+        function closeCallOverlay() {
+            document.getElementById('callOverlay').style.display = 'none';
+        }
+
+        function renderRecents() {
+            const list = document.getElementById('recentsListEl');
+            list.innerHTML = '';
+            recents.forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'recent-item';
+                div.innerHTML = `
+                    <div class="recent-main">
+                        <div class="recent-name">${r.name}</div>
+                        <div class="recent-info">
+                            <span>📲 呼出</span>
+                            <span>| ${r.duration}</span>
+                        </div>
+                    </div>
+                    <div class="recent-time">${r.subDate.split(' ')[0]}</div>
+                `; 
+                list.appendChild(div);
+            });
+        }
+        
+        function doClearRecents() {
+            recents = [];
+            saveData();
+            renderRecents();
+            closeModal('confirmClearModal');
+        }
+
+        // --- API 调用 (复刻 love_star 逻辑) ---
+        async function callLLM(messages) {
+            // 1. 读取配置
+            let config = await dbGet('qq_ai_config');
+
+            // 防御：如果读出来是字符串（某些旧版数据的残留），尝试解析
+            if (config && typeof config === 'string') {
+                try { config = JSON.parse(config); } catch(e) {}
+            }
+
+            // 2. 兼容旧版配置
+            if (!config) {
+                const presetsRaw = await dbGet(API_KEY_STORAGE);
+                const currentId = await dbGet(API_ID_STORAGE);
+                if (presetsRaw && currentId) {
+                    const presets = (typeof presetsRaw === 'string') ? JSON.parse(presetsRaw) : presetsRaw;
+                    config = presets.find(p => p.id == currentId);
+                }
+            }
+
+            if(!config || !config.url || !config.key) {
+                document.getElementById('callStatus').innerText = "配置缺失";
+                throw new Error("No API Config");
+            }
+
+            // 3. 处理 URL (完全照搬 love_star)
+            let cleanUrl = config.url.trim().replace(/\/+$/, '');
+            let fetchUrl = '';
+            if (cleanUrl.endsWith('/v1')) { fetchUrl = cleanUrl + '/chat/completions'; }
+            else if (cleanUrl.endsWith('/chat/completions')) { fetchUrl = cleanUrl; }
+            else { fetchUrl = cleanUrl + '/v1/chat/completions'; }
+
+            // 4. 请求体 (去掉了 max_tokens 和 stream，防止 api 报错)
+            const payload = {
+                model: config.model || 'gpt-3.5-turbo',
+                messages: messages,
+                temperature: Number(config.temperature) || 0.85
+            };
+
+            try {
+                const res = await fetch(fetchUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${config.key}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if(!res.ok) {
+                    // 让错误显示在界面上，方便你看
+                    document.getElementById('callStatus').innerText = `API错误: ${res.status}`;
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const data = await res.json();
+                if(!data.choices || data.choices.length === 0) {
+                    throw new Error("API返回空内容");
+                }
+                return data.choices[0].message.content;
+
+            } catch(e) {
+                console.error(e);
+                // 如果是网络问题，界面也会显示
+                if(document.getElementById('callStatus').innerText === "正在接通...") {
+                    document.getElementById('callStatus').innerText = "连接中断";
+                }
+                throw e;
+            }
+        }
+
+        // --- 通用弹窗/UI函数 ---
+        function openModal(id) {
+            const el = document.getElementById(id);
+            el.style.display = 'flex';
+            setTimeout(() => el.classList.add('show'), 10);
+        }
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            el.classList.remove('show');
+            setTimeout(() => el.style.display = 'none', 300);
+        }
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.opacity = 1;
+            setTimeout(() => t.style.opacity = 0, 2000);
+        }
+    </script>
+</body>
+</html>

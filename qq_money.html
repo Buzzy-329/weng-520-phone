@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wallet</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background: #f2f2f6;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #333; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        .header {
+            height: 90px; padding: 45px 20px 10px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            background: #fff; flex-shrink: 0;
+            z-index: 10;
+        }
+        .back-btn { font-size: 24px; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; }
+        .header-title { font-size: 18px; font-weight: bold; }
+        .placeholder { width: 40px; }
+
+        .content { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+
+        /* 余额卡片 */
+        .money-card {
+            background: linear-gradient(135deg, #ffb7c5 0%, #ff9aae 100%);
+            border-radius: 20px; padding: 30px 25px;
+            color: #fff; box-shadow: 0 10px 25px rgba(255, 183, 197, 0.4);
+            position: relative; overflow: hidden; flex-shrink: 0;
+        }
+        .balance-label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; }
+        .balance-num { font-size: 36px; font-weight: bold; }
+        .symbol { font-size: 24px; margin-right: 5px; }
+
+        .recharge-btn {
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.4);
+            padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #fff; cursor: pointer;
+            backdrop-filter: blur(5px);
+        }
+        .recharge-btn:active { background: rgba(255,255,255,0.4); }
+
+        /* 账单列表标题 */
+        .list-title { font-size: 16px; font-weight: 600; color: #333; margin-left: 5px; }
+
+        /* 账单列表 */
+        .trans-list {
+            background: #fff; border-radius: 16px; 
+            padding: 0 16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+        }
+        .trans-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 18px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .trans-item:last-child { border-bottom: none; }
+        
+        .t-left { display: flex; flex-direction: column; gap: 4px; }
+        .t-desc { font-size: 16px; font-weight: 500; color: #333; }
+        .t-time { font-size: 12px; color: #999; }
+        
+        .t-right { font-size: 18px; font-weight: 600; }
+        .amount-plus { color: #ff5e57; } /* 收入为红色 */
+        .amount-minus { color: #333; }    /* 支出为黑色 */
+
+        /* 空状态 */
+        .empty-tip { text-align: center; color: #aaa; font-size: 14px; margin-top: 30px; }
+
+        /* 弹窗 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); display: none; justify-content: center; align-items: center;
+            z-index: 100; backdrop-filter: blur(4px);
+        }
+        .modal-card {
+            background: #fff; width: 80%; max-width: 300px; border-radius: 20px; padding: 25px;
+            text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .modal-input {
+            width: 100%; padding: 12px; border: 1px solid #eee; border-radius: 10px; 
+            margin: 15px 0; 
+font-size: 18px; 
+text-align: center; 
+-webkit-appearance: none; /* 针对 iOS/Safari */
+appearance: none;         /* 针对现代标准浏览器 */
+        }
+        .modal-btns { display: flex; gap: 10px; }
+        .m-btn { flex: 1; padding: 12px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer; }
+        .btn-cancel { background: #f2f2f6; color: #888; }
+        .btn-confirm { background: #ffb7c5; color: #fff; }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+</head>
+<body>
+    <div class="header">
+        <div class="back-btn" onclick="history.back()">←</div>
+        <div class="header-title">钱包</div>
+        <div class="placeholder"></div>
+    </div>
+    
+    <div class="content">
+        <!-- 卡片 -->
+        <div class="money-card">
+            <div class="balance-label">账户余额 (CNY)</div>
+            <div class="balance-num"><span class="symbol">¥</span><span id="balanceText">--.--</span></div>
+            <div class="recharge-btn" onclick="document.getElementById('rechargeModal').style.display='flex'">充值</div>
+        </div>
+
+        <!-- 列表 -->
+        <div class="list-title">余额变动明细</div>
+        <div class="trans-list" id="transList">
+            <!-- 动态生成 -->
+        </div>
+    </div>
+
+    <!-- 充值弹窗 -->
+    <div class="modal-overlay" id="rechargeModal">
+        <div class="modal-card">
+            <h3>充值</h3>
+            <input type="number" class="modal-input" id="amountInput" placeholder="输入金额">
+            <div class="modal-btns">
+                <button class="m-btn btn-cancel" onclick="document.getElementById('rechargeModal').style.display='none'">取消</button>
+                <button class="m-btn btn-confirm" onclick="confirmRecharge()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BALANCE_KEY = 'qq_money_balance';
+        const HISTORY_KEY = 'qq_money_history';
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+
+        async function loadData() {
+            // 1. 加载余额
+            let b = await dbGet(BALANCE_KEY);
+            if(!b) { 
+                b = "1314.52"; 
+                await dbSet(BALANCE_KEY, b); 
+            }
+            document.getElementById('balanceText').innerText = parseFloat(b).toFixed(2);
+
+            // 2. 加载列表 (从字符串解析)
+            let historyStr = await dbGet(HISTORY_KEY);
+            let history = historyStr ? JSON.parse(historyStr) : [];
+            
+            const listEl = document.getElementById('transList');
+            listEl.innerHTML = '';
+
+            if (history.length === 0) {
+                listEl.innerHTML = '<div class="empty-tip">暂无账单记录</div><div style="height:20px"></div>';
+                listEl.style.boxShadow = 'none';
+                listEl.style.background = 'transparent';
+                return;
+            } else {
+                listEl.style.boxShadow = '0 2px 10px rgba(0,0,0,0.02)';
+                listEl.style.background = '#fff';
+            }
+
+            history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'trans-item';
+                
+                const val = parseFloat(item.amount);
+                const amountClass = val >= 0 ? 'amount-plus' : 'amount-minus';
+                const sign = val > 0 ? '+' : '';
+                
+                div.innerHTML = `
+                    <div class="t-left">
+                        <div class="t-desc">${item.desc}</div>
+                        <div class="t-time">${item.time}</div>
+                    </div>
+                    <div class="t-right ${amountClass}">${sign}${val.toFixed(2)}</div>
+                `;
+                listEl.appendChild(div);
+            });
+        }
+
+        async function confirmRecharge() {
+            const val = parseFloat(document.getElementById('amountInput').value);
+            if(val > 0) {
+                // 更新余额
+                let current = parseFloat(document.getElementById('balanceText').innerText);
+                let newBalance = current + val;
+                await dbSet(BALANCE_KEY, newBalance.toFixed(2));
+                
+                // 更新记录
+                let historyStr = await dbGet(HISTORY_KEY);
+                let history = historyStr ? JSON.parse(historyStr) : [];
+                
+                const now = new Date();
+                const timeStr = `${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+                
+                history.unshift({
+                    amount: val,
+                    desc: "钱包充值",
+                    time: timeStr
+                });
+                if(history.length > 50) history = history.slice(0, 50);
+                
+                // 存为字符串
+                await dbSet(HISTORY_KEY, JSON.stringify(history));
+
+                loadData();
+            }
+            document.getElementById('rechargeModal').style.display = 'none';
+            document.getElementById('amountInput').value = '';
+        }
+
+        window.onload = loadData;
+    </script>
+</body>
+</html>

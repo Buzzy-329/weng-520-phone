@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Love Space</title>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    <style>
+        /* --- 全局重置 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            overflow: hidden; user-select: none;
+        }
+
+        /* --- 页面切换容器 --- */
+        .page-container {
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0;
+            display: flex; flex-direction: column;
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
+            background: #fff;
+        }
+        .page-hidden { transform: translateX(30%); opacity: 0; pointer-events: none; z-index: 0; }
+        .page-active { transform: translateX(0); opacity: 1; z-index: 10; }
+
+        /* ================= 列表页样式 ================= */
+        .list-header {
+            padding: 60px 24px 20px; 
+            font-size: 28px; font-weight: 800; color: #333;
+            letter-spacing: -1px; background: #fff;
+        }
+        .list-subtitle { font-size: 14px; color: #999; font-weight: normal; margin-top: 5px; }
+        .char-list { flex: 1; overflow-y: auto; padding: 10px 24px; display: flex; flex-direction: column; gap: 15px; }
+        .char-item {
+            display: flex; align-items: center; padding: 16px;
+            background: #fff; border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(255, 182, 193, 0.15); /* 列表也稍微带点粉色阴影呼应 */
+            border: 1px solid rgba(255, 240, 245, 1);
+            transition: transform 0.1s;
+        }
+        .char-item:active { transform: scale(0.98); }
+        .list-avatar-box { position: relative; width: 56px; height: 56px; margin-right: 16px; }
+        .list-avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(255,182,193,0.3); }
+        .list-info { flex: 1; }
+        .list-name { font-size: 17px; color: #333; font-weight: 700; margin-bottom: 2px; }
+        .list-desc { font-size: 12px; color: #aaa; }
+        .list-arrow-btn { width: 36px; height: 36px; border-radius: 50%; background: #fff0f5; color: #ffb7c5; display: flex; justify-content: center; align-items: center; font-weight: bold; }
+
+        /* ================= 情侣空间页样式 ================= */
+        
+        /* 1. 顶部粉色区域 (保持不变) */
+        .top-pink-area {
+            position: relative; width: 100%; height: 420px;
+            background: linear-gradient(180deg, #ff9a9e 0%, #fecfef 100%);
+            border-bottom-left-radius: 40px; border-bottom-right-radius: 40px;
+            overflow: hidden; display: flex; flex-direction: column; align-items: center;
+            box-shadow: 0 10px 30px rgba(255, 154, 158, 0.3);
+        }
+
+        .stars-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .hollow-star {
+            position: absolute; width: 20px; height: 20px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/%3E%3C/svg%3E");
+            background-size: contain; background-repeat: no-repeat;
+            opacity: 0.6; animation: twinkle 3s infinite ease-in-out;
+        }
+        @keyframes twinkle { 0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.3; } 50% { transform: scale(1.2) rotate(15deg); opacity: 0.9; } }
+
+        /* 顶部按钮 (修改版：绝对正圆) */
+        .space-nav {
+            width: 100%; padding: 50px 24px 10px; z-index: 10; display: flex; justify-content: space-between;
+        }
+        .nav-icon { 
+            width: 42px; height: 42px; /* 固定宽高 */
+            display: flex; justify-content: center; align-items: center; /* 绝对居中 */
+            color: #fff; font-size: 20px;
+            background: rgba(255,255,255,0.25); 
+            backdrop-filter: blur(6px);
+            border-radius: 50%; /* 50%就是正圆 */
+            cursor: pointer; transition: transform 0.2s, background 0.2s;
+            border: 1px solid rgba(255,255,255,0.3); /* 微微描边增加精致感 */
+        }
+        .nav-icon:active { transform: scale(0.9); background: rgba(255,255,255,0.4); }
+
+        /* 头像与心电图 */
+        .couple-visual {
+            margin-top: 20px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0px;
+            position: relative; z-index: 5;
+        }
+        .heart-avatar-wrap {
+            width: 90px; height: 90px; position: relative;
+            animation: floatAvatar 4s ease-in-out infinite;
+        }
+        .heart-avatar-wrap.right { animation-delay: 2s; }
+        @keyframes floatAvatar { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+
+        .mask-heart {
+            width: 100%; height: 100%;
+            mask: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M50 88.9L16.7 55.6C7.2 46.1 7.2 30.9 16.7 21.4c9.5-9.5 24.7-9.5 33.3 0L50 21.4l0 0l0 0l0 0l0 0l0 0l0 0l0 0l0 0l0 0 0 0L50 21.4l0 0c8.6-9.5 23.8-9.5 33.3 0c9.5 9.5 9.5 24.7 0 34.2L50 88.9z" fill="black"/></svg>') no-repeat center / contain;
+            -webkit-mask: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M50 88.9L16.7 55.6C7.2 46.1 7.2 30.9 16.7 21.4c9.5-9.5 24.7-9.5 33.3 0L50 21.4l0 0l0 0l0 0l0 0l0 0l0 0l0 0l0 0l0 0 0 0L50 21.4l0 0c8.6-9.5 23.8-9.5 33.3 0c9.5 9.5 9.5 24.7 0 34.2L50 88.9z" fill="black"/></svg>') no-repeat center / contain;
+            background: #fff;
+        }
+        .mask-heart img { width: 100%; height: 100%; object-fit: cover; }
+        .border-heart-svg {
+            position: absolute; top: -2px; left: -2px; width: 94px; height: 94px;
+            pointer-events: none; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.1));
+        }
+        .border-path { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; }
+
+        .ekg-box {
+            width: 80px; height: 40px; margin: 0 -8px; z-index: 1;
+            display: flex; align-items: center; justify-content: center; opacity: 0.9;
+        }
+        .ekg-path {
+            stroke: #fff; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round;
+            stroke-dasharray: 100; stroke-dashoffset: 100;
+            animation: ekgDraw 2s linear infinite;
+            filter: drop-shadow(0 0 3px rgba(255,255,255,0.8));
+        }
+        @keyframes ekgDraw { 0%{stroke-dashoffset:100;opacity:0;} 10%{opacity:1;} 90%{opacity:1;} 100%{stroke-dashoffset:-100;opacity:0;} }
+
+        .note-container { margin-top: 30px; width: 100%; display: flex; justify-content: center; position: relative; z-index: 10; }
+        .note-input {
+            background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 30px; padding: 10px 20px; width: 75%;
+            text-align: center; color: #fff; font-size: 14px; font-weight: 500;
+            backdrop-filter: blur(8px); box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s;
+        }
+        .note-input:focus { background: rgba(255,255,255,0.4); width: 85%; transform: translateY(-2px); }
+        .note-input::placeholder { color: rgba(255,255,255,0.8); }
+
+        /* ================= 4. 功能卡片区 (修改版：纯白+粉色光晕) ================= */
+        .cards-scroll-area {
+            flex: 1; margin-top: -30px; z-index: 20;
+            padding: 0 24px 40px 24px;
+            overflow-y: auto; display: flex; flex-direction: column; gap: 16px;
+        }
+        .card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        /* 通用卡片样式重写 */
+        .widget-card {
+            background: #fff; /* 纯白底色 */
+            border-radius: 24px; 
+            padding: 20px;
+            
+            /* 粉色光晕效果！ */
+            box-shadow: 0 10px 30px rgba(255, 182, 193, 0.35), 0 0 0 1px rgba(255, 240, 245, 1);
+            
+            position: relative; overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .widget-card:active { 
+            transform: scale(0.97); 
+            box-shadow: 0 5px 15px rgba(255, 182, 193, 0.4); 
+        }
+
+        /* 1. 聊天卡片 (纯白+小图标) */
+        .widget-chat {
+            grid-column: span 2;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 100px; padding: 0 25px;
+        }
+        .chat-info h3 { margin: 0; font-size: 18px; color: #333; font-weight: 700; }
+        .chat-info p { margin: 4px 0 0 0; font-size: 13px; color: #999; }
+        .chat-icon-circle {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: #fff0f5; /* 浅粉底色 */
+            display: flex; justify-content: center; align-items: center;
+            color: #ff9a9e; font-size: 24px; 
+            box-shadow: 0 4px 10px rgba(255, 182, 193, 0.3);
+        }
+
+        /* 2. 纪念日卡片 */
+        .widget-days {
+            display: flex; flex-direction: column; justify-content: space-between;
+            height: 160px;
+        }
+        /* 加一个淡淡的粉色装饰球在右上角，增加通透感 */
+        .widget-days::before {
+            content: ''; position: absolute; top: -30px; right: -30px;
+            width: 100px; height: 100px; border-radius: 50%;
+            background: radial-gradient(circle, #ffeef2 0%, rgba(255,255,255,0) 70%);
+            pointer-events: none;
+        }
+        .days-icon { font-size: 28px; margin-bottom: 10px; }
+        .days-title { font-size: 16px; font-weight: 700; color: #333; }
+        .days-desc { font-size: 12px; color: #999; margin-top: 4px; line-height: 1.4; }
+        .days-tag { 
+            margin-top: auto; align-self: flex-start;
+            padding: 4px 12px; background: #fff0f5; color: #ff9a9e; 
+            border-radius: 12px; font-size: 11px; font-weight: 700; 
+        }
+
+        /* 3. 小卡片 */
+        .widget-small { height: 160px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 8px; }
+        .icon-box {
+            width: 48px; height: 48px; border-radius: 18px;
+            display: flex; justify-content: center; align-items: center; font-size: 22px;
+            margin-bottom: 5px;
+        }
+        .icon-diary { background: #f3e5f5; color: #ce93d8; }
+        .icon-star { background: #e3f2fd; color: #90caf9; }
+        .small-title { font-size: 15px; font-weight: 700; color: #444; }
+        .small-sub { font-size: 12px; color: #bbb; }
+
+        .empty-tip { text-align: center; margin-top: 60px; color: #ccc; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <!-- 页面1：角色列表 -->
+    <div id="listPage" class="page-container page-active">
+        <div class="list-header">
+            Love Space
+            <div class="list-subtitle">选择你的特别对象</div>
+        </div>
+        <div class="char-list" id="charListContainer"></div>
+    </div>
+
+    <!-- 页面2：情侣空间详情 -->
+    <div id="spacePage" class="page-container page-hidden">
+        
+        <div class="top-pink-area">
+            <!-- 闪动星星背景 -->
+            <div class="stars-overlay" id="starsOverlay"></div>
+
+            <div class="space-nav">
+                <div class="nav-icon" onclick="goBackToList()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </div>
+                <div class="nav-icon" onclick="goToDetail()">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </div>
+            </div>
+
+            <!-- 核心视觉区：头像 & 心电图 -->
+            <div class="couple-visual">
+                <div class="heart-avatar-wrap">
+                    <svg class="border-heart-svg" viewBox="0 0 100 100"><path class="border-path" d="M50 88.9L16.7 55.6C7.2 46.1 7.2 30.9 16.7 21.4c9.5-9.5 24.7-9.5 33.3 0L50 21.4l0 0l0 0l0 0l0 0l0 0l0 0l0 0 0 0L50 21.4l0 0c8.6-9.5 23.8-9.5 33.3 0c9.5 9.5 9.5 24.7 0 34.2L50 88.9z" /></svg>
+                    <div class="mask-heart"><img id="spaceUserAvatar" src=""></div>
+                </div>
+
+                <div class="ekg-box">
+                    <svg width="100%" height="100%" viewBox="0 0 100 40"><path class="ekg-path" d="M0 20 L30 20 L40 5 L50 35 L60 20 L100 20" /></svg>
+                </div>
+
+                <div class="heart-avatar-wrap right">
+                    <svg class="border-heart-svg" viewBox="0 0 100 100"><path class="border-path" d="M50 88.9L16.7 55.6C7.2 46.1 7.2 30.9 16.7 21.4c9.5-9.5 24.7-9.5 33.3 0L50 21.4l0 0l0 0l0 0l0 0l0 0l0 0l0 0 0 0L50 21.4l0 0c8.6-9.5 23.8-9.5 33.3 0c9.5 9.5 9.5 24.7 0 34.2L50 88.9z" /></svg>
+                    <div class="mask-heart"><img id="spaceCharAvatar" src=""></div>
+                </div>
+            </div>
+
+            <!-- 文案输入 -->
+            <div class="note-container">
+                <input type="text" class="note-input" id="loveNote" placeholder="在这里写下甜蜜的签名..." onchange="saveLoveNote()">
+            </div>
+        </div>
+
+        <!-- 底部功能卡片 (Widget风格：白底粉光晕) -->
+        <div class="cards-scroll-area">
+            
+            <!-- 1. 进入聊天 -->
+            <div class="widget-card widget-chat" onclick="goToChat()">
+                <div class="chat-info">
+                    <h3>进入聊天</h3>
+                    <p>和Ta说说话吧</p>
+                </div>
+                <div class="chat-icon-circle">💬</div>
+            </div>
+
+            <div class="card-row">
+                <!-- 2. 纪念日 -->
+                <div class="widget-card widget-days" onclick="goToFeature('love_days.html')">
+                    <div>
+                        <div class="days-icon">📅</div>
+                        <div class="days-title">纪念日</div>
+                        <div class="days-desc">重要的日子<br>要铭记在心</div>
+                    </div>
+                    <div class="days-tag" id="daysCountTag">查看详情</div>
+                </div>
+
+                <!-- 3. 日记 & 星星 -->
+<div style="display:flex; flex-direction:column; gap:16px;">
+    <!-- 修改后：指向 love_diary.html -->
+    <div class="widget-card widget-small" onclick="goToFeature('love_diary.html')">
+        <div class="icon-box icon-diary">📒</div>
+        <div class="small-title">情侣日记</div>
+        <div class="small-sub">交换心事</div>
+    </div>
+    
+    <!-- 修改后：指向 love_star.html -->
+    <div class="widget-card widget-small" onclick="goToFeature('love_star.html')">
+        <div class="icon-box icon-star">✨</div>
+        <div class="small-title">看星星</div>
+        <div class="small-sub">浪漫星空</div>
+    </div>
+</div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- 核心：数据库连接工具 ---
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+        const DB_KEY = 'qq_app_data_pro_max_final';
+        const BEAR_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iI2YwZjBmNSIvPjxjaXJjbGUgY3g9IjIwIiBjeT0iMjUiIHI9IjEyIiBmaWxsPSIjZDFkMWQ2Ii8+PGNpcmNsZSBjeD0iODAiIGN5PSIyNSIgcj0iMTIiIGZpbGw9IiNkMWQxZDYiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjU1IiByPSIzNSIgZmlsbD0iI2U1ZTVlYSIvPjxjaXJjbGUgY3g9IjM4IiBjeT0iNTAiIHI9IjQiIGZpbGw9IiM4ZThlOTMiLz48Y2lyY2xlIGN4PSI2MiIgY3k9IjUwIiByPSI0IiBmaWxsPSIjOGU4ZTkzIi8+PGVsbGlwc2UgY3g9IjUwIiBjeT0iNjUiIHJ4PSI4IiByeT0iNiIgZmlsbD0iI2ZmZiIvPjxjaXJjbGUgY3g9IjUwIiBjeT0iNjMiIHI9IjMiIGZpbGw9IiMzMzMiLz48L3N2Zz4=`;
+        
+        let characters = [];
+        let currentCharId = null;
+
+        function createStars() {
+            const container = document.getElementById('starsOverlay');
+            container.innerHTML = '';
+            for(let i=0; i<15; i++) {
+                const star = document.createElement('div');
+                star.className = 'hollow-star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                const size = 12 + Math.random() * 15;
+                star.style.width = size + 'px';
+                star.style.height = size + 'px';
+                container.appendChild(star);
+            }
+        }
+
+        window.onload = function() {
+            loadData();
+            createStars();
+        };
+
+        async function loadData() {
+            try {
+                // 从 QQ_DB_V3 读取数据
+                const raw = await dbGet(DB_KEY);
+                if (raw) {
+                    // 兼容处理：如果是字符串就解析，如果是对象直接用
+                    characters = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+                }
+                renderList(); // 数据加载完成后渲染列表
+            } catch (e) {
+                console.error("读取数据失败:", e);
+            }
+        }
+
+        async function saveData() {
+            // 保存前转为 JSON 字符串，确保格式统一
+            await dbSet(DB_KEY, JSON.stringify(characters));
+            
+            // 可选：通知其他窗口刷新 (虽然情侣空间通常不需要实时广播，但加个保险)
+            if (window.parent && window.parent.postMessage) {
+                window.parent.postMessage({ type: 'refresh_list' }, '*');
+            }
+        }
+
+        function renderList() {
+            const container = document.getElementById('charListContainer');
+            container.innerHTML = '';
+            const validChars = characters.filter(c => c.type !== 'group');
+
+            if(validChars.length === 0) {
+                container.innerHTML = '<div class="empty-tip">暂无角色，请先在聊天列表添加</div>';
+                return;
+            }
+
+            validChars.forEach(char => {
+                const div = document.createElement('div');
+                div.className = 'char-item';
+                const avatarSrc = char.avatar || BEAR_SVG;
+                div.innerHTML = `<div class="list-avatar-box"><img class="list-avatar" src="${avatarSrc}"></div><div class="list-info"><div class="list-name">${char.name}</div><div class="list-desc">点击进入情侣空间</div></div><div class="list-arrow-btn">➜</div>`;
+                div.onclick = () => openSpace(char.id);
+                container.appendChild(div);
+            });
+        }
+
+        function openSpace(id) {
+            currentCharId = id;
+            const char = characters.find(c => c.id === id);
+            if(!char) return;
+
+            document.getElementById('spaceUserAvatar').src = char.userAvatar || BEAR_SVG;
+            document.getElementById('spaceCharAvatar').src = char.avatar || BEAR_SVG;
+            document.getElementById('loveNote').value = char.loveNote || '';
+            updateDaysTag(char);
+
+            document.getElementById('listPage').classList.remove('page-active');
+            document.getElementById('listPage').classList.add('page-hidden');
+            document.getElementById('spacePage').classList.remove('page-hidden');
+            document.getElementById('spacePage').classList.add('page-active');
+        }
+
+        function updateDaysTag(char) {
+            const tag = document.getElementById('daysCountTag');
+            if(char.loveDays && char.loveDays.length > 0) {
+                tag.innerText = `已添加 ${char.loveDays.length} 个`;
+            } else {
+                tag.innerText = "去添加";
+            }
+        }
+
+        function goBackToList() {
+            document.getElementById('spacePage').classList.remove('page-active');
+            document.getElementById('spacePage').classList.add('page-hidden');
+            document.getElementById('listPage').classList.remove('page-hidden');
+            document.getElementById('listPage').classList.add('page-active');
+            currentCharId = null;
+        }
+
+        function saveLoveNote() {
+            if(!currentCharId) return;
+            const val = document.getElementById('loveNote').value;
+            const idx = characters.findIndex(c => c.id === currentCharId);
+            if(idx !== -1) {
+                characters[idx].loveNote = val;
+                saveData();
+            }
+        }
+
+        function goToChat() {
+            if(!currentCharId) return;
+            window.location.href = `chat_window.html?id=${currentCharId}`;
+        }
+        
+        async function goToDetail() {
+            if(!currentCharId) return;
+            // 写入数据库，供详情页读取
+            await dbSet('edit_char_id', currentCharId);
+            // 跳转
+            window.location.href = 'char_detail.html?id=' + currentCharId;
+        }
+
+        function goToFeature(htmlFile) {
+            if(!currentCharId) return;
+            window.location.href = `${htmlFile}?id=${currentCharId}`;
+        }
+    </script>
+</body>
+</html>

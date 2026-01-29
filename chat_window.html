@@ -1,0 +1,3040 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Chat Window</title>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    <style id="dynamicStyles">
+        /* 动态样式插入点 */
+    </style>
+    <style>
+        /* --- 基础设置 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; 
+            width: 100%; 
+            background-color: #f2f2f6; /* 默认背景，会被动态覆盖 */
+            background-size: cover; background-position: center; background-attachment: fixed;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            display: flex; flex-direction: column; overflow: hidden;
+            -webkit-user-select: none; user-select: none;
+        }
+        ::-webkit-scrollbar { display: none; }
+        * { scrollbar-width: none; -ms-overflow-style: none; }
+
+        /* --- 聊天头部 --- */
+        .chat-header {
+            height: 110px; 
+            padding: 45px 15px 10px 15px; 
+            background: rgba(255,255,255,0.9);
+            display: grid; grid-template-columns: 44px 1fr auto; align-items: center;
+            border-bottom: 1px solid rgba(0,0,0,0.05); backdrop-filter: blur(10px);
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 100;
+        }
+        .back-btn { width: 44px; height: 44px; display: flex; justify-content: flex-start; align-items: center; cursor: pointer; color: #007AFF; }
+        .header-center { display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+        .chat-title { font-weight: 600; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
+        .chat-status { font-size: 12px; color: #999; margin-top: 4px; display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 8px; border-radius: 10px; transition: background 0.2s; }
+        .chat-status:active { background: rgba(0,0,0,0.05); }
+        .status-dot { width: 6px; height: 6px; background: #34C759; border-radius: 50%; }
+        .chat-title.typing { color: #007AFF; animation: pulseText 1.5s infinite ease-in-out; }
+        @keyframes pulseText { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .chat-header-right { display: flex; gap: 5px; }
+        .header-icon-btn { width: 44px; height: 44px; display: flex; justify-content: center; align-items: center; cursor: pointer; color: #333; transition: opacity 0.2s; }
+        .header-icon-btn:active { opacity: 0.6; }
+        .icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+        /* --- 聊天内容区 --- */
+        .chat-body { flex: 1; padding: 120px 16px 110px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .msg-time { text-align: center; font-size: 12px; color: #b0b0b0; margin: 15px 0 5px 0; font-weight: 500; text-shadow: 0 1px 2px rgba(255,255,255,0.8); }
+        .msg-system-row { display: flex; justify-content: center; margin: 5px 0; }
+        .sys-bubble { background: rgba(0,0,0,0.04); color: #999; font-size: 12px; padding: 4px 12px; border-radius: 10px; max-width: 85%; text-align: center; backdrop-filter: blur(2px); }
+        .sys-recall-link { cursor: pointer; color: #5c6b8c; text-decoration: none; }
+        
+        .msg-row { display: flex; width: 100%; align-items: flex-start; gap: 10px; animation: fadeUp 0.3s ease; }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+        .msg-row.ai { flex-direction: row; }
+        .msg-row.me { flex-direction: row-reverse; }
+
+        .msg-avatar-box { width: 42px; height: 42px; border-radius: 50%; background: #e0e0e0; flex-shrink: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; }
+        .msg-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+        .bear-svg { width: 100%; height: 100%; }
+
+        /* --- 气泡样式 (基础) --- */
+        .bubble {
+            max-width: 72%; padding: 12px 16px; border-radius: 20px; 
+            font-size: 16px; line-height: 1.5; word-wrap: break-word; position: relative; margin-top: 2px;
+            user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+        }
+        /* 默认样式，会被详情页 CSS 覆盖 */
+        .msg-row.ai .bubble { background: #fff; color: #333; border-top-left-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
+        .msg-row.me .bubble { background: #0099FF; color: #fff; border-top-right-radius: 4px; }
+        
+        .reply-block { margin-bottom: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(0,0,0,0.05); font-size: 13px; color: #666; display: flex; flex-direction: column; border-left: 3px solid #ccc; }
+        .msg-row.me .reply-block { background: rgba(0,0,0,0.15); color: #e0e0e0; border-left: 3px solid rgba(255,255,255,0.5); }
+        .reply-sender { font-weight: 600; font-size: 12px; margin-bottom: 2px; opacity: 0.8; }
+        .reply-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
+
+        /* --- 修复双语模式分割线样式 --- */
+        .bubble hr { border: 0; border-top: 1px solid rgba(0,0,0,0.15); margin: 8px 0; width: 100%; }
+        .msg-row.me .bubble hr { border-top: 1px solid rgba(255,255,255,0.4); }
+        
+        /* --- 底部输入区 --- */
+        .input-bar-wrap { position: fixed; bottom: 0; left: 0; right: 0; width: 100%; box-sizing: border-box; min-height: 95px; background: rgba(245, 245, 247, 0.9); padding: 15px 25px 35px 15px; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(20px); border-top: 1px solid rgba(0,0,0,0.05); z-index: 210; }
+        .input-field { flex: 1; height: 42px; max-width: 62%; background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 21px; padding: 0 15px; font-size: 16px; }
+        .action-btn { width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.08); border: none; transition: transform 0.1s; flex-shrink: 0; }
+        .action-btn:active { transform: scale(0.9); }
+        .btn-plus { background: #fff; color: #333; }
+        .btn-reply { background: #fff; color: #6e00ff; } 
+        .btn-send { background: #007AFF; color: #fff; } 
+        
+        .func-frame-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 205; pointer-events: none; display: none; }
+        .func-frame-container.active { pointer-events: auto; display: block; }
+        .overlay-frame { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 900; pointer-events: none; display: none; }
+        .overlay-frame.active { pointer-events: auto; display: block; }
+        .quote-bar { position: fixed; bottom: 95px; left: 0; width: 100%; background: #f7f7f7; padding: 10px 15px; display: none; align-items: center; justify-content: space-between; color: #666; font-size: 13px; border-top: 1px solid #e0e0e0; z-index: 209; }
+        .quote-content { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 10px; }
+        .quote-close { width: 20px; height: 20px; color: #999; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 18px; }
+
+        /* --- 弹窗 --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 500; display: none; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-card { background: rgba(255,255,255,0.98); width: 80%; max-width: 320px; border-radius: 24px; padding: 25px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 15px 40px rgba(0,0,0,0.15); animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes popIn { from{transform:scale(0.85);opacity:0;} to{transform:scale(1);opacity:1;} }
+        .modal-title { font-size: 18px; font-weight: 600; text-align: center; color: #333; }
+        .modal-msg { font-size: 14px; color: #666; text-align: center; line-height: 1.5; word-wrap: break-word; }
+        .modal-input { width: 100%; padding: 12px; background: #f2f2f6; border: none; border-radius: 12px; font-size: 16px; text-align: center; color: #333; }
+        .modal-btns { display: flex; gap: 10px; margin-top: 10px; }
+        .m-btn { flex: 1; padding: 14px; border-radius: 14px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .m-btn:active { opacity: 0.7; }
+        .m-btn.cancel { background: #f2f2f6; color: #888; }
+        .m-btn.confirm { background: #333; color: #fff; }
+        .m-btn.full-width { width: 100%; }
+
+        .pat-glow .modal-card { box-shadow: 0 0 25px rgba(255, 255, 255, 0.9), 0 10px 30px rgba(0,0,0,0.1); }
+        .thoughts-glow .modal-card { box-shadow: 0 0 25px rgba(255, 255, 255, 0.9), 0 10px 30px rgba(0,0,0,0.1); position: relative; min-height: 350px; }
+        .close-icon { position: absolute; top: 18px; right: 18px; width: 24px; height: 24px; stroke: #000; stroke-width: 2.5; cursor: pointer; z-index: 10; }
+        .history-clock { position: absolute; top: 18px; left: 18px; width: 24px; height: 24px; color: #007AFF; cursor: pointer; z-index: 10; }
+        .thoughts-container { flex: 1; display: flex; flex-direction: column; gap: 12px; transition: opacity 0.2s; }
+        .thoughts-container.hidden { display: none; }
+        .thought-section { background: #f9f9fc; padding: 14px; border-radius: 14px; display: flex; flex-direction: column; gap: 6px; }
+        .thought-label { font-size: 11px; color: #ffb7b2; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        .thought-content { font-size: 15px; color: #444; line-height: 1.4; }
+        .history-list-view { flex: 1; display: none; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 300px; padding: 5px; }
+        .history-list-view.active { display: flex; }
+        .history-item { background: #f5f5f7; padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px; }
+        .h-time { font-size: 11px; color: #aaa; }
+        .h-content { font-size: 13px; color: #555; }
+
+/* --- 新增功能样式 --- */
+
+/* 1. 粉色气泡 (转账/语音) */
+.bubble.pink-bubble {
+    background: #FFDDE3;
+    color: #333;
+    border: none;
+    box-shadow: 0 2px 5px rgba(255, 107, 129, 0.15);
+    min-width: 80px;
+    width: fit-content; /* 让宽度自适应内容 */
+    padding: 15px;    /* 稍微增加一点内边距 */
+    display: flex; flex-direction: column; gap: 5px;
+}
+.msg-row.me .bubble.pink-bubble { border-top-right-radius: 4px; }
+.msg-row.ai .bubble.pink-bubble { border-top-left-radius: 4px; }
+
+/* 转账卡片内部 */
+.transfer-card { display: flex; align-items: center; gap: 10px; }
+.transfer-icon-circle {
+    width: 36px; height: 36px; background: #FF6B81; border-radius: 50%;
+    display: flex; justify-content: center; align-items: center; color: #fff;
+    font-size: 18px; font-weight: bold; flex-shrink: 0;
+}
+.transfer-info { display: flex; flex-direction: column; }
+.transfer-amount { font-size: 16px; font-weight: 600; color: #000; }
+.transfer-desc { font-size: 12px; color: rgba(0,0,0,0.5); }
+.transfer-status { font-size: 10px; color: #FF6B81; margin-top: 4px; text-align: right; font-weight: bold; }
+
+/* 2. 语音条 */
+.voice-bubble { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.voice-icon { width: 16px; height: 16px; fill: #FF6B81; }
+.voice-duration { font-size: 13px; color: #FF6B81; font-weight: 500; }
+.voice-text-content { 
+    margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,107,129,0.2); 
+    font-size: 13px; color: #555; display: none; 
+}
+.voice-text-content.show { display: block; }
+
+/* 3. 图片 (灰色小熊) */
+.bubble.img-bubble {
+    padding: 0; background: transparent !important; box-shadow: none;
+    cursor: pointer; overflow: hidden; border-radius: 12px;
+}
+.bear-img-placeholder {
+    width: 120px; height: 120px; background: #e0e0e0;
+    display: flex; justify-content: center; align-items: center;
+}
+.bear-svg-lg { width: 80%; height: 80%; opacity: 0.6; }
+
+/* 图片查看弹窗 (粉色光晕) */
+.modal-overlay.img-glow .modal-card {
+    box-shadow: 0 0 30px rgba(255, 107, 129, 0.4);
+    border: 1px solid rgba(255, 107, 129, 0.2);
+}
+
+/* --- 新增：表情面板容器 --- */
+.emoticon-frame-container {
+    position: fixed;
+    bottom: 0; left: 0;
+    width: 100%;
+    height: 45%; /* 占据屏幕下方约 40-45% */
+    border: none;
+    z-index: 300; /* 比输入框层级高，或者根据需求调整 */
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    box-shadow: 0 -5px 30px rgba(0,0,0,0.1);
+    transform: translateY(110%); /* 默认隐藏在底部 */
+    transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+    background: #fff;
+    display: none; /* 初始不显示 */
+}
+.emoticon-frame-container.active {
+    display: block;
+    transform: translateY(0);
+}
+
+/* --- 新增：表情包气泡样式 --- */
+.bubble.emo-bubble {
+    padding: 0; background: transparent !important; box-shadow: none;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.emo-img {
+    max-width: 100px; /* 表情包最大宽度 */
+    max-height: 100px;
+    border-radius: 8px;
+    object-fit: contain;
+}
+.emo-name-tag {
+    font-size: 10px; color: #999;
+    padding: 2px 6px; background: rgba(255,255,255,0.5);
+    border-radius: 10px; backdrop-filter: blur(2px);
+}
+.img-desc-text { text-align: center; font-size: 16px; color: #333; font-weight: 500; padding: 20px; }
+
+/* --- 悄悄话 (Whisper) 功能样式 --- */
+
+/* 1. 弹窗容器与背景特效 */
+.whisper-modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.4); z-index: 600;
+    display: none; justify-content: center; align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+.whisper-card {
+    position: relative;
+    width: 85%; max-width: 340px; height: 65%;
+    background: #FFF0F5; /* 淡粉色背景 */
+    border-radius: 24px;
+    box-shadow: 0 0 30px rgba(255, 182, 193, 0.6), 0 0 60px rgba(255, 105, 180, 0.2); /* 粉色光晕 */
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+/* 闪烁的星星背景容器 */
+.stars-container {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 0; overflow: hidden;
+}
+/* 星星本体 (白色中空五角星 SVG) */
+.star-deco {
+    position: absolute;
+    /* 使用SVG Data URI 绘制中空星星，stroke=white 表示白色边框，fill=none 表示中空 */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+    border: none; /* 移除原来的方框边框 */
+    clip-path: none; /* 移除原来的裁剪 */
+    opacity: 0; /* 默认隐藏，由动画控制显示 */
+    animation: starTwinkle 3s infinite ease-in-out;
+}
+
+@keyframes starTwinkle {
+    0% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1.2) rotate(15deg); } /* 闪烁最亮时变大 */
+    100% { opacity: 0; transform: scale(0.5) rotate(30deg); }
+}
+
+/* 弹窗头部 */
+.whisper-header {
+    position: relative; z-index: 2;
+    padding: 15px; text-align: center;
+    font-size: 18px; font-weight: bold; color: #ff7eb9;
+    letter-spacing: 2px;
+    text-shadow: 0 2px 4px rgba(255,255,255,0.8);
+}
+.whisper-close {
+    position: absolute; top: 15px; right: 15px;
+    width: 24px; height: 24px; color: #ff7eb9;
+    cursor: pointer; font-size: 20px; line-height: 24px;
+}
+
+/* 便签墙滚动区域 */
+.whisper-content-area {
+    position: relative; 
+    z-index: 2;
+    flex: 1; 
+    overflow-y: auto;       /* 核心：允许下翻滚动 */
+    padding: 15px;
+    display: flex;          /* 改动：变为弹性布局 */
+    flex-direction: column; /* 改动：方向改为垂直向下，一张张排列 */
+    gap: 15px;              /* 保持间距 */
+}
+
+/* --- 便签纸样式多样化 --- */
+.sticky-note {
+    position: relative;
+    min-height: 100px;
+    padding: 25px 10px 10px 10px; /* 上方留出空间给叉号 */
+    box-shadow: 2px 4px 8px rgba(0,0,0,0.1);
+    font-size: 13px; line-height: 1.4; color: #555;
+    transition: transform 0.2s;
+    cursor: default;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+}
+.sticky-note:active { transform: scale(0.98); }
+
+/* 便签右上角的叉号 */
+.note-delete-btn {
+    position: absolute; top: 2px; right: 2px;
+    width: 20px; height: 20px;
+    color: #ff6b81; font-weight: bold; font-size: 16px;
+    cursor: pointer; display: flex; justify-content: center; align-items: center;
+    opacity: 0.6;
+}
+.note-delete-btn:hover { opacity: 1; }
+
+/* 样式1: 粉色爱心底纹 */
+.note-style-hearts {
+    background-color: #fff0f3;
+    background-image: radial-gradient(#ffb3c1 15%, transparent 16%), radial-gradient(#ffb3c1 15%, transparent 16%);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    border-radius: 2px 2px 15px 2px; /* 右下角卷角效果 */
+}
+/* 样式2: 棕色底+橙色圆点 */
+.note-style-dots {
+    background-color: #fdf6e3;
+    background-image: radial-gradient(#ffcc80 20%, transparent 20%);
+    background-size: 15px 15px;
+    border-radius: 2px;
+    border-top: 3px solid rgba(255,200,150,0.5); /* 胶带效果 */
+}
+/* 样式3: 纯白折纸+格子线 */
+.note-style-grid {
+    background-color: #fff;
+    background-image: linear-gradient(#e0e0e0 1px, transparent 1px), linear-gradient(90deg, #e0e0e0 1px, transparent 1px);
+    background-size: 20px 20px;
+    border: 1px solid #eee;
+    transform: rotate(-2deg);
+}
+/* 样式4: 淡紫色云朵感 */
+.note-style-cloud {
+    background-color: #f3e5f5;
+    border-radius: 12px;
+    border: 2px dashed #ce93d8;
+}
+
+/* 旋转多样化 (通过JS添加类名) */
+.rotate-left { transform: rotate(-3deg); }
+.rotate-right { transform: rotate(2deg); }
+.rotate-big-left { transform: rotate(-5deg); }
+.rotate-big-right { transform: rotate(4deg); }
+
+/* --- 文字样式多样化 --- */
+.text-strike { text-decoration: line-through; color: #999; }
+.text-bold-pink { font-weight: 800; color: #e91e63; font-size: 14px; }
+.text-small { font-size: 11px; color: #777; letter-spacing: 1px; }
+.text-bounce { display: inline-block; animation: textBounce 1s infinite alternate; }
+@keyframes textBounce { from { transform: translateY(0); } to { transform: translateY(-2px); } }
+.text-messy { font-family: "Courier New", Courier, monospace; letter-spacing: -1px; }
+/* --- 多选模式样式 --- */
+.multiselect-mode .bubble { cursor: pointer; }
+/* 勾选框基础样式 */
+.check-mark {
+    position: absolute; width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(0,0,0,0.3); border: 2px solid #fff;
+    display: none; justify-content: center; align-items: center;
+    z-index: 10; pointer-events: none;
+}
+.check-mark::after {
+    content: ''; width: 10px; height: 5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff;
+    transform: rotate(-45deg) translate(2px, -2px); display: none;
+}
+/* 选中状态 */
+.bubble.selected .check-mark { background: #007AFF; border-color: #007AFF; }
+.bubble.selected .check-mark::after { display: block; }
+
+/* 多选模式下显示勾选框 */
+.multiselect-mode .msg-row.me .bubble .check-mark { display: flex; bottom: -5px; right: -8px; }
+.multiselect-mode .msg-row.ai .bubble .check-mark { display: flex; bottom: -5px; left: -8px; }
+
+/* 让系统消息气泡支持定位勾选框 */
+.sys-bubble { position: relative; cursor: default; }
+.multiselect-mode .sys-bubble { cursor: pointer; }
+
+/* 系统消息选中状态 */
+.sys-bubble.selected .check-mark { background: #007AFF; border-color: #007AFF; }
+.sys-bubble.selected .check-mark::after { display: block; }
+
+/* 多选模式下，系统消息显示勾选框 (位置微调放在右下角) */
+.multiselect-mode .sys-bubble .check-mark { display: flex; bottom: -5px; right: -8px; }
+
+/* 转发/收藏卡片样式 */
+.bubble.card-bubble {
+    padding: 0; background: #fff !important; color: #333;
+    overflow: hidden; min-width: 220px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.card-header { padding: 12px 15px; font-size: 15px; font-weight: 600; border-bottom: 1px solid #f0f0f0; display:flex; align-items:center; gap:8px;}
+.card-content { padding: 10px 15px; font-size: 12px; color: #888; line-height: 1.6; max-height: 100px; overflow:hidden; }
+.card-footer { padding: 8px 15px; background: #fafafa; font-size: 10px; color: #aaa; border-top: 1px solid #f0f0f0; }
+
+/* 收藏卡片特有样式 (粉色) */
+.bubble.collect-bubble .card-header { background: #FFF0F5; color: #FF6B81; }
+.bubble.collect-bubble .card-footer { background: #FFF0F5; color: #FFB7C5; }
+.collect-icon { width:16px; height:16px; fill:currentColor;}
+
+/* 多选操作栏 iframe 容器 */
+.multiselect-frame-container {
+    position: fixed; top: 0; left: 0; width: 100%; height: 110px; /* 覆盖头部 */
+    border: none; z-index: 400; display: none;
+}
+.multiselect-frame-container.active { display: block; }
+/* --- 修复删除确认弹窗被遮挡的问题 --- */
+#deleteNoteConfirmModal {
+    z-index: 650 !important; /* 让它比悄悄话界面(600)更高 */
+}
+
+
+    </style>
+</head>
+<body>
+
+    <!-- 悄悄话弹窗 -->
+<div class="whisper-modal-overlay" id="whisperModal">
+    <div class="whisper-card">
+        <!-- 动态星星背景 -->
+        <div class="stars-container" id="starsBg">
+            <!-- JS 会在这里生成星星 -->
+        </div>
+        
+        <div class="whisper-header">
+            悄悄话
+            <div class="whisper-close" onclick="document.getElementById('whisperModal').style.display='none'">×</div>
+        </div>
+        
+        <div class="whisper-content-area" id="whisperNoteWall">
+            <!-- 便签会动态插入到这里 -->
+        </div>
+    </div>
+</div>
+
+<!-- 删除确认弹窗 (复用现有样式结构，ID区分) -->
+<div class="modal-overlay" id="deleteNoteConfirmModal">
+    <div class="modal-card">
+        <div class="modal-title">删除便签</div>
+        <div class="modal-msg">确定要撕掉这张便签吗？</div>
+        <div class="modal-btns">
+            <button class="m-btn cancel" onclick="document.getElementById('deleteNoteConfirmModal').style.display='none'">取消</button>
+            <button class="m-btn confirm" style="background:#ff6b81;" onclick="confirmDeleteNote()">撕掉</button>
+        </div>
+    </div>
+</div>
+    
+    <div class="quote-bar" id="quoteBar">
+        <div class="quote-content" id="quoteText">引用: ...</div>
+        <div class="quote-close" onclick="cancelQuote()">×</div>
+    </div>
+
+    <!-- 多选操作栏 iframe -->
+<iframe id="multiFrame" class="multiselect-frame-container" src=""></iframe>
+
+<!-- 转发/收藏 查看弹窗 -->
+<div class="modal-overlay" id="cardViewModal">
+    <div class="modal-card" style="max-height: 80vh; padding:0; overflow:hidden;">
+        <div class="modal-title" id="cardViewTitle" style="padding:15px; background:#f9f9f9; margin:0; border-bottom:1px solid #eee;">聊天记录</div>
+        <div id="cardViewList" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:10px;"></div>
+        <div style="padding:10px; border-top:1px solid #eee; text-align:center;">
+            <button class="m-btn confirm full-width" onclick="document.getElementById('cardViewModal').style.display='none'">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 转发选择角色弹窗 -->
+<div class="modal-overlay" id="forwardSelectModal">
+    <div class="modal-card">
+        <div class="modal-title">选择转发对象</div>
+        <div id="forwardCharList" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; width:100%;">
+            <!-- JS 填充 -->
+        </div>
+        <div class="modal-btns">
+            <button class="m-btn cancel full-width" onclick="document.getElementById('forwardSelectModal').style.display='none'">取消</button>
+        </div>
+    </div>
+</div>
+
+    <iframe id="menuFrame" class="overlay-frame" src="qq_func_menu.html"></iframe>
+
+    <div class="chat-header">
+        <div class="back-btn" onclick="backToList()">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </div>
+        
+        <div class="header-center">
+            <div class="chat-title" id="currentChatTitle" onclick="openWhisperModal()">加载中...</div>
+            <div class="chat-status" onclick="openStatusEdit()">
+                <div class="status-dot"></div>
+                <span id="headerStatusText">在线</span>
+            </div>
+        </div>
+
+        <div class="chat-header-right">
+            <div class="header-icon-btn" id="listenBtn" onclick="openListenModal()">
+                <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 12 L12 2"></path></svg>
+            </div>
+            <div class="header-icon-btn" id="chatDetailBtn" onclick="goToCharDetail()">
+                <svg class="icon" viewBox="0 0 24 24" style="stroke-width:2.5;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-body" id="msgContainer"></div>
+
+    <iframe id="funcFrame" class="func-frame-container"></iframe>
+    
+    <!-- 新增：表情面板 iframe -->
+    <iframe id="emoticonFrame" class="emoticon-frame-container" src=""></iframe>
+
+    <div class="input-bar-wrap">
+        <button class="action-btn btn-plus" onclick="toggleFuncFrame()">
+            <svg class="icon" viewBox="0 0 24 24" style="width:20px;height:20px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+
+        <input type="text" class="input-field" id="msgInput" placeholder="发消息..." autocomplete="off">
+        <button class="action-btn btn-reply" id="replyBtn" onclick="triggerAiReply()">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+        </button>
+        <button class="action-btn btn-send" onclick="sendUserMsg()">
+            <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+    </div>
+
+    <!-- 弹窗部分 -->
+    <div class="modal-overlay" id="editMsgModal">
+        <div class="modal-card">
+            <div class="modal-title">编辑消息</div>
+            <textarea 
+                class="modal-input" 
+                id="editMsgInput" 
+                rows="1" 
+                style="text-align: left; resize: none; overflow-y: auto; max-height: 300px; min-height: 40px;"
+                oninput="this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';"
+            ></textarea>
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="document.getElementById('editMsgModal').style.display='none'">取消</button>
+                <button class="m-btn confirm" onclick="confirmEditMsg()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay pat-glow" id="patModal">
+        <div class="modal-card">
+            <div class="modal-title">拍一拍</div>
+            <div class="modal-msg">你拍了拍“<span id="patTargetName"></span>”...</div>
+            <input type="text" class="modal-input" id="patSuffixInput" placeholder="请输入后缀 (选填)" maxlength="15">
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="document.getElementById('patModal').style.display='none'">取消</button>
+                <button class="m-btn confirm" onclick="sendPat()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="recallViewModal">
+        <div class="modal-card">
+            <div class="modal-title">撤回的消息</div>
+            <div class="modal-msg" id="recallContentText" style="font-style: italic; color: #555; padding: 10px; background: #f9f9fc; border-radius: 10px;"></div>
+            <div class="modal-btns">
+                <button class="m-btn confirm full-width" onclick="document.getElementById('recallViewModal').style.display='none'">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="statusModal">
+        <div class="modal-card">
+            <div class="modal-title">修改状态</div>
+            <input type="text" class="modal-input" id="statusInput" placeholder="例如：忙碌中..." maxlength="10">
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="document.getElementById('statusModal').style.display='none'">取消</button>
+                <button class="m-btn confirm" onclick="saveStatus()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay thoughts-glow" id="thoughtsModal">
+        <div class="modal-card">
+            <svg class="close-icon" onclick="document.getElementById('thoughtsModal').style.display='none'" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            <svg class="history-clock" onclick="toggleThoughtsHistory()" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <div class="modal-title" id="thoughtsTitle" style="margin-bottom:15px">角色心声</div>
+            <div class="thoughts-container" id="currentThoughtsView">
+                <div class="thought-section"><span class="thought-label">当前状态 (STATUS)</span><span class="thought-content" id="thoughtStatus">读取中...</span></div>
+                <div class="thought-section"><span class="thought-label">今日穿搭 (OUTFIT)</span><span class="thought-content" id="thoughtOutfit">读取中...</span></div>
+                <div class="thought-section"><span class="thought-label">此刻心声 (THOUGHTS)</span><span class="thought-content" id="thoughtMind">读取中...</span></div>
+            </div>
+            <div class="history-list-view" id="historyThoughtsView"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="errorModal">
+        <div class="modal-card"><div class="modal-title" style="color:#FF3B30">提示</div><div class="modal-msg" id="errorMsgText"></div><button class="m-btn confirm full-width" onclick="document.getElementById('errorModal').style.display='none'">好的</button></div>
+    </div>
+
+    <!-- 1. 剧情推进输入弹窗 -->
+    <div class="modal-overlay" id="advanceModal">
+        <div class="modal-card">
+            <div class="modal-title">剧情推进</div>
+            <textarea class="modal-input" id="advanceInput" rows="3" placeholder="例如：刚才我们一起去看了电影..." style="text-align:left; resize:none;"></textarea>
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="document.getElementById('advanceModal').style.display='none'">取消</button>
+                <button class="m-btn confirm" onclick="confirmAdvance()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 转账输入弹窗 -->
+    <div class="modal-overlay" id="transferModal">
+        <div class="modal-card">
+            <div class="modal-title">转账</div>
+            <input type="number" class="modal-input" id="transferAmount" placeholder="金额 (¥)" step="0.01">
+            <input type="text" class="modal-input" id="transferNote" placeholder="备注 (选填)" style="margin-top:10px;">
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="document.getElementById('transferModal').style.display='none'">取消</button>
+                <button class="m-btn confirm" onclick="confirmTransfer()">转账</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 语音输入弹窗 -->
+    <div class="modal-overlay" id="voiceModal">
+        <div class="modal-card">
+            <div class="modal-title">发语音</div>
+            <textarea class="modal-input" id="voiceTextInput" rows="3" placeholder="输入你想说的话 (将转换为语音条)" style="text-align:left; resize:none;"></textarea>
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="document.getElementById('voiceModal').style.display='none'">取消</button>
+                <button class="m-btn confirm" onclick="confirmVoice()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 图片输入弹窗 -->
+    <div class="modal-overlay" id="imageInputModal">
+        <div class="modal-card">
+            <div class="modal-title">发图片</div>
+            <textarea class="modal-input" id="imageDescInput" rows="3" placeholder="描述图片内容..." style="text-align:left; resize:none;"></textarea>
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="document.getElementById('imageInputModal').style.display='none'">取消</button>
+                <button class="m-btn confirm" onclick="confirmImage()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. 图片查看弹窗 (带粉色光晕) -->
+    <div class="modal-overlay img-glow" id="imageViewModal">
+        <div class="modal-card">
+            <div class="modal-title" style="font-size:14px; color:#999;">图片内容</div>
+            <div class="img-desc-text" id="imageViewText"></div>
+            <button class="m-btn confirm full-width" onclick="document.getElementById('imageViewModal').style.display='none'">关闭</button>
+        </div>
+    </div>
+
+    <!-- 6. 角色收到转账的处理弹窗 -->
+    <div class="modal-overlay" id="charTransferActionModal">
+        <div class="modal-card">
+            <div class="modal-title">处理转账</div>
+            <div class="modal-msg">角色要怎么处理这笔转账？</div>
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="handleTransferAction('return')">退回</button>
+                <button class="m-btn confirm" style="background:#FF6B81;" onclick="handleTransferAction('accept')">收取</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. 用户点击转账时的选择弹窗 (新增) -->
+    <div class="modal-overlay" id="userReceiveTransferModal">
+        <div class="modal-card">
+            <div class="modal-title">转账确认</div>
+            <div class="modal-msg">确认收取对方的转账吗？</div>
+            <div class="modal-btns">
+                <!-- 这里的 refuse 和 accept 会调用我们在第三步写的新函数 -->
+                <button class="m-btn cancel" onclick="confirmUserTransferAction('returned')">拒收</button>
+                <button class="m-btn confirm" style="background:#FF6B81;" onclick="confirmUserTransferAction('accepted')">收取</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. 切换一起听对象确认弹窗 -->
+    <div class="modal-overlay" id="switchListenModal">
+        <div class="modal-card">
+            <div class="modal-title">切换一起听</div>
+            <div class="modal-msg">你正在和别人一起听歌，确认要切换为和当前角色一起听吗？</div>
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="document.getElementById('switchListenModal').style.display='none'">取消</button>
+                <button class="m-btn confirm" onclick="confirmSwitchListen()">切换</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatChannel = new BroadcastChannel('buzzy_sync_channel');
+        // ---【新增】监听多窗口同步消息 ---
+        chatChannel.onmessage = async (event) => {
+            const data = event.data;
+            if (!data) return;
+
+            // 1. 如果有其他窗口更新了聊天列表/历史记录
+            if (data.type === 'refresh_list') {
+                // 重新从数据库加载数据到内存
+                await loadData();
+                
+                // 如果当前正在查看的角色被更新了，且不是正在输入状态，则刷新界面
+                if (activeChatId && currentChar && currentChar.id === activeChatId) {
+                    // 重新找到最新的角色数据
+                    const updatedChar = characters.find(c => c.id === activeChatId);
+                    if (updatedChar) {
+                        // 比较长度，只有当消息变多了才刷新，避免打断阅读
+                        if (updatedChar.history.length !== currentChar.history.length) {
+                             renderChat(activeChatId, true); // true 表示保持滚动位置(如果处于查看历史状态)或自动到底
+                        }
+                        // 更新内存中的当前角色
+                        currentChar = updatedChar; 
+                    }
+                }
+            }
+            
+            // 2. 如果日记更新了，聊天窗口不需要立即刷新界面，
+            // 但因为我们是实时读取数据库的 triggerAiReply，所以不需要额外操作，
+            // 下次回复时自然会读取到最新的日记。
+        };
+        // --- IndexedDB 助手函数 (开始) ---
+let dbPromise;
+function initDB() {
+    if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+    return dbPromise;
+}
+
+async function dbGet(key) {
+    const db = await initDB();
+    return await db.get('keyval', key);
+}
+
+async function dbSet(key, val) {
+    const db = await initDB();
+    return await db.put('keyval', val, key);
+}
+
+async function dbRemove(key) {
+    const db = await initDB();
+    return await db.delete('keyval', key);
+}
+// --- IndexedDB 助手函数 (结束) ---
+        const DB_KEY = 'qq_app_data_pro_max_final';
+        let characters = []; 
+        let isWindowVisible = true; // --- 新增这一行：默认认为是显示的 ---
+        let visibleMsgCount = 50;
+        let tempTransferIndex = -1; // 用来暂存当前点击的转账消息下标
+        let activeChatId = null;
+        let currentChar = null; // 当前聊天对象缓存
+        const TIME_INTERVAL = 30 * 60 * 1000;
+        const BEAR_SVG = `<svg viewBox="0 0 100 100" class="bear-svg"><circle cx="50" cy="50" r="50" fill="#f0f0f5"/><circle cx="20" cy="25" r="12" fill="#d1d1d6"/><circle cx="80" cy="25" r="12" fill="#d1d1d6"/><circle cx="50" cy="55" r="35" fill="#e5e5ea"/><circle cx="38" cy="50" r="4" fill="#8e8e93"/><circle cx="62" cy="50" r="4" fill="#8e8e93"/><ellipse cx="50" cy="65" rx="8" ry="6" fill="#fff"/><circle cx="50" cy="63" r="3" fill="#333"/></svg>`;
+
+        let clickTimer = null;
+        let longPressTimer = null;
+        let selectedMsgIndex = -1;
+        let quotingContent = null; 
+        let isMultiselectMode = false;
+let selectedMsgIndices = new Set();
+
+        // --- 新增：钱包余额与记录更新函数 ---
+async function updateWalletBalance(changeAmount, reason) {
+    const BALANCE_KEY = 'qq_money_balance';
+    const HISTORY_KEY = 'qq_money_history'; // 新增的记录Key
+    
+    // 1. 更新余额
+    let current = parseFloat(await dbGet(BALANCE_KEY));
+    if(isNaN(current)) current = 1314.52; // 如果没存过，给个默认值
+    let newBalance = current + changeAmount;
+    await dbSet(BALANCE_KEY, newBalance.toFixed(2));
+
+    // 2. 写入流水记录
+    let history = JSON.parse(await dbGet(HISTORY_KEY) || "[]");
+    const now = new Date();
+    // 格式化时间 mm-dd hh:mm
+    const timeStr = `${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    
+    history.unshift({
+        amount: changeAmount, // 存带正负号的数值
+        desc: reason,
+        time: timeStr
+    });
+    
+    // 只保留最近 50 条记录
+    if(history.length > 50) history = history.slice(0, 50);
+    await dbSet(HISTORY_KEY, JSON.stringify(history));
+}
+
+        async function loadData() {
+            // 1. 尝试从 IndexedDB (新家) 读取
+            const raw = await dbGet(DB_KEY);
+            if(raw) { 
+                characters = JSON.parse(raw); 
+            } else {
+                // 2. 如果新家是空的，尝试从 localStorage (老家) 搬运数据
+                console.log("新数据库为空，尝试从 LocalStorage 迁移数据...");
+                const oldRaw = localStorage.getItem(DB_KEY);
+                if(oldRaw) {
+                    characters = JSON.parse(oldRaw);
+                    // 搬运到新家
+                    await dbSet(DB_KEY, oldRaw); 
+                    console.log("数据迁移成功！");
+                    // 可选：迁移成功后删除旧数据，防止混淆（建议先留着备份，稳定后再删）
+                    // localStorage.removeItem(DB_KEY); 
+                }
+            }
+        }
+        async function saveData() { 
+            await dbSet(DB_KEY, JSON.stringify(characters)); 
+            // 广播通知其他窗口刷新
+            chatChannel.postMessage({ type: 'refresh_list' });
+        }
+        function closeModal(id, e) { if(e.target.id === id) document.getElementById(id).style.display = 'none'; }
+        
+        function backToList() { window.parent.openApp('qq.html'); }
+        async function goToCharDetail() { 
+            if(!activeChatId) return; 
+            // 把 ID 放在 URL 里传过去，不再依赖数据库中间变量
+            window.location.href = 'char_detail.html?id=' + activeChatId; 
+        }
+        
+        async function openListenModal() { 
+            const currentListenId = await dbGet('qq_current_listen_id');
+            // 如果没人在听，或者正在听的就是当前这位
+            if (!currentListenId || currentListenId === activeChatId) {
+                await dbSet('qq_current_listen_id', activeChatId);
+                // 【修改点】发消息给 index.html 让它显示播放器
+                window.parent.postMessage({ action: 'open_listen_frame' }, '*');
+            } else {
+                document.getElementById('switchListenModal').style.display = 'flex';
+            }
+        }
+
+        async function confirmSwitchListen() {
+            document.getElementById('switchListenModal').style.display = 'none';
+            // 切换 ID
+            await dbSet('qq_current_listen_id', activeChatId);
+            
+            // 刷新 iframe 以重置播放器状态 (可选，或者直接显示让用户切歌)
+            const frame = document.getElementById('listenFrame');
+            frame.src = frame.src; // Reload
+            
+            frame.classList.add('active');
+        }
+
+        window.onload = async function() {
+            await loadData();
+            await initAudioSystem(); // 初始化音频
+            const urlParams = new URLSearchParams(window.location.search);
+            activeChatId = urlParams.get('id');
+            if(activeChatId) {
+                renderChat(activeChatId);
+                // 搜索跳转逻辑
+                const jumpIdx = await dbGet('chat_jump_index');
+                if (jumpIdx !== null) {
+                    await dbRemove('chat_jump_index');
+                    setTimeout(() => {
+                        const rows = document.querySelectorAll('.msg-row');
+                        if(rows[jumpIdx]) {
+                            rows[jumpIdx].scrollIntoView({behavior: 'smooth', block: 'center'});
+                            rows[jumpIdx].style.transition = 'background 1s';
+                            rows[jumpIdx].style.backgroundColor = 'rgba(255, 235, 59, 0.3)';
+                            setTimeout(() => rows[jumpIdx].style.backgroundColor = 'transparent', 2000);
+                        }
+                    }, 500);
+                }
+                // 检查是否有转发任务
+const pendingForward = await dbGet('pending_forward_msg');
+if (pendingForward) {
+    const task = JSON.parse(pendingForward);
+    if (task.targetId === activeChatId) {
+        await dbRemove('pending_forward_msg');
+        // 发送卡片消息
+        appendSpecialMsg('forward_card', JSON.parse(task.content), true);
+    }
+}
+            } else {
+                alert("未找到聊天对象");
+                backToList();
+            }
+            
+            window.addEventListener('message', async function(event) {
+                const data = event.data;
+                if (!data) return;
+
+                if (data.type === 'update_subtitle' || data.type === 'toggle_global_subtitle') {
+                    window.parent.postMessage(data, '*');
+                }
+                
+                if (data.action === 'menuAction') {
+                    menuAction(data.cmd);
+                } else if (data.action === 'closeMenu') {
+                    document.getElementById('menuFrame').classList.remove('active');
+                } else if (data.action === 'closeListen') {
+                    document.getElementById('listenFrame').classList.remove('active');
+                    
+                } 
+                // --- 新增：表情包相关 ---
+                else if (data.action === 'closeEmoticon') {
+                    document.getElementById('emoticonFrame').classList.remove('active');
+                }
+                else if (data.action === 'sendEmoticon') {
+                    // 用户点击了表情包
+                    // data 结构: { url: '...', name: '...' }
+                    document.getElementById('emoticonFrame').classList.remove('active');
+                    appendSpecialMsg('emoticon', { url: data.url, name: data.name }, true);
+                }
+                // --- 新增：处理来自主页的未读标记指令 ---
+                else if (data.type === 'update_unread_via_index') {
+                    // 只有当接收到的 ID 和当前角色 ID 一致时才处理
+                    if (currentChar && currentChar.id === data.chatId) {
+                        currentChar.unread = (currentChar.unread || 0) + 1;
+                        await saveData(); // 保存数据
+                        
+                        // 顺便通知 QQ 列表刷新一下（如果列表在后台开着的话）
+                        // 注意：这里需要往 parent 的 appFrame 发消息，稍微复杂点，
+                        // 但通常用户切回列表时会自动刷新，所以只保存数据就够了。
+                        // 为了保险，我们可以尝试广播一下：
+                        window.parent.postMessage({ type: 'refresh_qq_list_request' }, '*'); 
+                    }
+                }
+                if (data.type === 'app_visibility_change') {
+                isWindowVisible = data.isVisible;
+                
+                // 如果变为了“显示”，立刻清空未读数并保存
+                if (isWindowVisible && currentChar) {
+                    if (currentChar.unread !== 0) {
+                        currentChar.unread = 0;
+                        await saveData();
+                        // 通知列表刷新(去掉红点)
+                        window.parent.postMessage({ type: 'refresh_qq_list_request' }, '*');
+                    }
+                }
+            }
+            });
+        };
+
+        // 处理来自 iframe 的指令
+window.handleFuncAction = function(type) {
+    if (type === 'regenerate') {
+        handleRegenerate();
+    } else if (type === 'emoticon') {
+        // 打开表情面板
+        const emoFrame = document.getElementById('emoticonFrame');
+        if (!emoFrame.getAttribute('src')) { emoFrame.src = 'emoticon.html'; }
+        emoFrame.classList.add('active');
+        // 通知 emoticon.html 刷新可能的绑定数据或状态
+        setTimeout(() => {
+             emoFrame.contentWindow.postMessage({action: 'refresh'}, '*');
+        }, 100);
+    } else if (type === 'advance') {
+        document.getElementById('advanceInput').value = '';
+        document.getElementById('advanceModal').style.display = 'flex';
+    } else if (type === 'transfer') {
+        document.getElementById('transferAmount').value = '';
+        document.getElementById('transferNote').value = '';
+        document.getElementById('transferModal').style.display = 'flex';
+    } else if (type === 'voice') {
+        document.getElementById('voiceTextInput').value = '';
+        document.getElementById('voiceModal').style.display = 'flex';
+    } else if (type === 'image') {
+        document.getElementById('imageDescInput').value = '';
+        document.getElementById('imageInputModal').style.display = 'flex';
+    }
+};
+
+// --- 1. 重说逻辑 ---
+function handleRegenerate() {
+    if (!currentChar || currentChar.history.length === 0) return;
+    
+    // 从后往前找，删除所有连续的 assistant 消息
+    let hasDeleted = false;
+    for (let i = currentChar.history.length - 1; i >= 0; i--) {
+        if (currentChar.history[i].role === 'assistant') {
+            currentChar.history.pop();
+            hasDeleted = true;
+        } else {
+            break; // 遇到用户消息停止
+        }
+    }
+    
+    if (hasDeleted) {
+        saveData();
+        renderChat(activeChatId);
+        // 重新触发回复
+        triggerAiReply();
+    } else {
+        alert("上一条不是角色的回复，无法重说");
+    }
+}
+
+// --- 2. 剧情推进 ---
+function confirmAdvance() {
+    const text = document.getElementById('advanceInput').value.trim();
+    if (!text) return;
+    
+    document.getElementById('advanceModal').style.display = 'none';
+    
+    // 发送系统样式的剧情提示
+    const sysMsg = `剧情推进：${text}`;
+    currentChar.history.push({ role: 'system', content: sysMsg, timestamp: Date.now() });
+    saveData();
+    renderChat(activeChatId);
+    
+    // 触发 AI 读取
+    triggerAiReply(); 
+}
+
+// --- 3. 转账 ---
+function confirmTransfer() {
+    const amount = document.getElementById('transferAmount').value;
+    const note = document.getElementById('transferNote').value;
+    if (!amount) return;
+
+    document.getElementById('transferModal').style.display = 'none';
+
+    updateWalletBalance(-parseFloat(amount), `给 ${currentChar.name} 转账`);
+    
+    // 发送转账消息 type: 'transfer'
+    appendSpecialMsg('transfer', { amount: amount, note: note, status: 'pending' }, true);
+}
+
+// --- 4. 语音 ---
+function confirmVoice() {
+    const text = document.getElementById('voiceTextInput').value.trim();
+    if (!text) return;
+
+    document.getElementById('voiceModal').style.display = 'none';
+    
+    // 估算时长 (每3个字1秒，最少2秒)
+    let duration = Math.max(2, Math.floor(text.length / 3)) + '"';
+    
+    appendSpecialMsg('voice', { text: text, duration: duration }, true);
+}
+
+// --- 5. 图片 ---
+function confirmImage() {
+    const desc = document.getElementById('imageDescInput').value.trim();
+    if (!desc) return;
+
+    document.getElementById('imageInputModal').style.display = 'none';
+    appendSpecialMsg('image', { desc: desc }, true);
+}
+
+// --- 通用：发送特殊消息 ---
+function appendSpecialMsg(type, data, isMe) {
+    if (!currentChar) return;
+    
+    currentChar.history.push({
+        role: isMe ? 'user' : 'assistant',
+        msgType: type, // 标记特殊类型
+        content: JSON.stringify(data), // 数据存为 JSON 字符串
+        timestamp: Date.now()
+    });
+    if (!isMe && !isWindowVisible) {
+        currentChar.unread = (currentChar.unread || 0) + 1;
+        // 注意：saveData() 在下面一行，所以这里不用单独调 save
+        window.parent.postMessage({ type: 'refresh_qq_list_request' }, '*');
+    }
+    saveData();
+    renderChat(activeChatId);
+}
+
+        function toggleFuncFrame() {
+            const frame = document.getElementById('funcFrame');
+            if (!frame.getAttribute('src')) { frame.src = 'qq_func_panel.html'; }
+            if (frame.classList.contains('active')) { frame.classList.remove('active'); } else { frame.classList.add('active'); }
+        }
+        window.closeFuncFrame = function() { document.getElementById('funcFrame').classList.remove('active'); }
+
+        const msgContainer = document.getElementById('msgContainer');
+        const msgInput = document.getElementById('msgInput');
+
+        function loadMoreHistory() {
+            visibleMsgCount += 50; // 每次多点一次，多加载50条
+            // 重新渲染，并传入 true 表示保持滚动位置，不要自动滚到底部
+            renderChat(activeChatId, true);
+        }
+        
+        function renderChat(id, maintainPosition = false) {
+            const char = characters.find(c => c.id === id);
+            if(!char) { backToList(); return; }
+            currentChar = char; 
+            if (char.unread && char.unread > 0) {
+                char.unread = 0;
+                saveData(); // 保存清零状态
+            }
+
+            // 应用详情页设定
+            document.getElementById('currentChatTitle').innerText = char.name; 
+            document.getElementById('headerStatusText').innerText = char.currentStatus || "在线";
+            
+            // 应用美化：背景
+            if(char.chatBg) {
+                document.body.style.backgroundImage = `url(${char.chatBg})`;
+            } else {
+                document.body.style.backgroundImage = 'none';
+            }
+            
+            // 样式注入
+            let finalStyle = "";
+            if(char.bubbleCss) {
+                if(char.bubbleCss.includes('{')) { finalStyle += char.bubbleCss + "\n"; } 
+                else { finalStyle += `.bubble { ${char.bubbleCss} }\n`; }
+            }
+            if(char.uiCss) { finalStyle += char.uiCss; }
+            document.getElementById('dynamicStyles').innerHTML = finalStyle;
+
+            const isChar = char.type === 'char';
+            document.getElementById('chatDetailBtn').style.visibility = isChar ? 'visible' : 'hidden';
+            document.getElementById('listenBtn').style.visibility = isChar ? 'visible' : 'hidden';
+
+            // --- 记录旧的滚动高度，用于加载更多时定位 ---
+            const oldScrollHeight = msgContainer.scrollHeight;
+
+            msgContainer.innerHTML = '';
+            
+            if(!char.history) char.history = []; 
+            
+            // ================== 分页核心逻辑开始 ==================
+            const totalCount = char.history.length;
+            // 计算从哪里开始截取：总数 - 显示数。如果结果小于0，就从0开始。
+            const startIdx = Math.max(0, totalCount - visibleMsgCount);
+            // 截取需要显示的部分
+            const displayList = char.history.slice(startIdx);
+
+            // 如果还有更早的消息没显示，在顶部添加“加载更多”按钮
+            if (startIdx > 0) {
+                const loadBtnRow = document.createElement('div');
+                loadBtnRow.className = 'msg-system-row';
+                loadBtnRow.innerHTML = `<div class="sys-bubble" style="cursor:pointer; color:#007AFF; background:rgba(255,255,255,0.5);" onclick="loadMoreHistory()">
+                    ▲ 点击加载更多记录 (剩余 ${startIdx} 条)
+                </div>`;
+                msgContainer.appendChild(loadBtnRow);
+            }
+            // ================== 分页核心逻辑结束 ==================
+            
+            let lastTime = 0;
+            
+            // 注意：这里遍历的是 displayList (截取后的数组)
+            displayList.forEach((msg, i) => {
+                // 【重要】计算这一条在原始 history 数组里的真实索引
+                // 因为编辑、撤回、引用都需要真实的 index
+                const realIndex = startIdx + i; 
+
+                const msgTime = msg.timestamp || 0;
+                if (msgTime - lastTime > TIME_INTERVAL) {
+                    appendTime(msgTime);
+                    lastTime = msgTime;
+                }
+
+                // 定义勾选框 (为了让系统消息也能用)
+                const checkMarkHtml = `<div class="check-mark"></div>`;
+
+                if(msg.isRecall) {
+                    const row = document.createElement('div');
+                    row.className = 'msg-system-row';
+                    
+                    let contentHTML = '';
+                    if (msg.role === 'assistant') {
+                        contentHTML = `${char.name} 撤回了一条消息 <span class="sys-recall-link" onclick="viewRecalledContent('${msg.recalledContent.replace(/'/g, "\\'")}')" style="margin-left:5px; font-size:11px;">[点击查看]</span>`;
+                    } else {
+                        contentHTML = `你撤回了一条消息`;
+                    }
+                    // 修改点：加了 data-idx, onclick, checkMarkHtml
+                    row.innerHTML = `<div class="sys-bubble" data-idx="${realIndex}"
+                        onclick="isMultiselectMode ? toggleMsgSelection(${realIndex}) : void(0)">
+                        ${contentHTML} ${checkMarkHtml}
+                    </div>`;
+                    
+                    msgContainer.appendChild(row);
+
+                } else if(msg.role === 'system') {
+                    const row = document.createElement('div'); 
+                    row.className = 'msg-system-row';
+                    // 修改点：加了 data-idx, onclick, checkMarkHtml
+                    row.innerHTML = `<div class="sys-bubble" data-idx="${realIndex}" 
+                        oncontextmenu="return false;" 
+                        ontouchstart="handleMsgTouchStart(event, ${realIndex}, 'system')" 
+                        ontouchend="handleMsgTouchEnd()"
+                        onclick="isMultiselectMode ? toggleMsgSelection(${realIndex}) : void(0)">
+                        ${msg.content} ${checkMarkHtml}
+                    </div>`;
+                    msgContainer.appendChild(row);
+
+                } else {
+                    // 普通消息保持不变
+                    appendBubble(msg.content, msg.role === 'user', realIndex, false, msg.quoteData, msg.msgType || msg.type || 'text');
+                }
+            });
+
+            // 滚动处理
+            if (maintainPosition) {
+                // 如果是加载历史，保持视口位置（模拟向上加载的效果）
+                // 计算高度差，然后调整 scrollTop
+                // 稍微延时一点点等待DOM渲染
+                setTimeout(() => {
+                    const newScrollHeight = msgContainer.scrollHeight;
+                    msgContainer.scrollTop = newScrollHeight - oldScrollHeight; 
+                }, 0);
+            } else {
+                // 如果是正常进入或发送消息，滚到底部
+                scrollToBottom();
+            }
+            
+            cancelQuote(); 
+        }
+
+        function appendTime(ts) {
+            const date = new Date(ts);
+            const now = new Date();
+            const div = document.createElement('div'); 
+            div.className = 'msg-time';
+
+            const timeStr = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+            const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+            const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+            const isYesterday = date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear();
+            const isThisYear = date.getFullYear() === now.getFullYear();
+
+            if (isToday) div.innerText = timeStr;
+            else if (isYesterday) div.innerText = `昨天 ${timeStr}`;
+            else if (isThisYear) div.innerText = `${date.getMonth() + 1}月${date.getDate()}日 ${timeStr}`;
+            else div.innerText = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${timeStr}`;
+
+            msgContainer.appendChild(div);
+        }
+
+        // 修改 appendBubble 支持特殊消息
+function appendBubble(text, isMe, index, save = true, quoteData = null, msgType = 'text') {
+    const row = document.createElement('div');
+    row.className = `msg-row ${isMe ? 'me' : 'ai'}`;
+    
+    // 头像逻辑 (保持不变)
+    let avatarSrc = BEAR_SVG; 
+    let hasImg = false;
+    if(isMe && currentChar && currentChar.userAvatar) {
+        avatarSrc = `<img src="${currentChar.userAvatar}" class="msg-avatar-img">`; hasImg = true;
+    } else if(!isMe && currentChar && currentChar.avatar) {
+        avatarSrc = `<img src="${currentChar.avatar}" class="msg-avatar-img">`; hasImg = true;
+    }
+    const avatarBox = `<div class="msg-avatar-box" ${!isMe ? 'onclick="handleAvatarClick(event)"' : ''}>${avatarSrc}</div>`;
+    
+    let bubbleHtml = '';
+    const checkMarkHtml = `<div class="check-mark"></div>`;
+    
+    // --- 根据 msgType 渲染不同气泡 ---
+    
+    if (msgType === 'forward') {
+        // 解析论坛生成的纯文本格式
+        // 格式参考：[转发帖子]\n标题: ...\n作者: ...\n摘要: ...
+        const lines = text.split('\n');
+        const title = lines.find(l => l.startsWith('标题:'))?.substring(3) || '未命名帖子';
+        const author = lines.find(l => l.startsWith('作者:'))?.substring(3) || '佚名';
+        const snippet = lines.find(l => l.startsWith('摘要:'))?.substring(3) || text;
+
+        // 复用 card-bubble 样式，图标换成文章图标
+        const cardInner = `
+            <div class="card-header" style="color:#007AFF;">
+                <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                ${title}
+            </div>
+            <div class="card-content" style="color:#666;">
+                <span style="font-weight:bold;color:#333;">@${author}</span>: ${snippet}
+            </div>
+            <div class="card-footer">Forum Article</div>
+        `;
+        
+        // 点击不做跳转，或者你可以加 alert('在同人专区查看完整内容')
+        bubbleHtml = `<div class="bubble card-bubble" data-idx="${index}"
+            ontouchstart="handleMsgTouchStart(event, ${index}, '${isMe?'user':'ai'}')" 
+            ontouchend="handleMsgTouchEnd()"
+            onclick="isMultiselectMode ? toggleMsgSelection(${index}) : void(0)">
+            ${cardInner} ${checkMarkHtml}
+        </div>`;
+    } 
+    else if (msgType === 'forward_card' || msgType === 'collection_card') {
+        let data = {};
+        try { data = JSON.parse(text); } catch(e) {}
+        
+        const isCollect = msgType === 'collection_card';
+        const title = isCollect ? "收藏的聊天记录" : `转发的聊天记录`;
+        // 提取预览
+        let previewHtml = "";
+        if(data.msgs && data.msgs.length) {
+            data.msgs.slice(0, 3).forEach(m => {
+                let c = m.content;
+                if(m.msgType && m.msgType!='text') c = `[${m.msgType}]`;
+                previewHtml += `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.role==='user'?'我':(data.sourceName||'对方')}: ${c}</div>`;
+            });
+        }
+        
+        const cardInner = `
+            <div class="card-header">
+                ${isCollect ? '<span>★</span>' : '<svg style="width:16px;height:16px;fill:#333" viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>'}
+                ${title}
+            </div>
+            <div class="card-content">${previewHtml || '...'}</div>
+            <div class="card-footer">Chat History</div>
+        `;
+        
+        bubbleHtml = `<div class="bubble ${isCollect?'collect-bubble':'card-bubble'}" data-idx="${index}"
+            ontouchstart="handleMsgTouchStart(event, ${index}, '${isMe?'user':'ai'}')" 
+            ontouchend="handleMsgTouchEnd()"
+            onclick="isMultiselectMode ? toggleMsgSelection(${index}) : viewCardContent('${text.replace(/'/g, "\\'")}', ${isCollect})">
+            ${cardInner} ${checkMarkHtml}
+        </div>`;
+    } 
+    else 
+    
+    if (msgType === 'transfer') {
+        // 解析 JSON 数据
+        let data = {};
+        try { data = JSON.parse(text); } catch(e) { data = { amount: '?', note: text }; } // 兼容旧文本
+        
+        let statusText = '';
+        if (data.status === 'accepted') statusText = '已收款';
+        else if (data.status === 'returned') statusText = '已退回';
+        
+        // 转账气泡结构
+        const inner = `
+            <div class="transfer-card">
+                <div class="transfer-icon-circle">¥</div>
+                <div class="transfer-info">
+                    <div class="transfer-amount">¥${data.amount}</div>
+                    ${data.note ? `<div class="transfer-desc">${data.note}</div>` : ''}
+                </div>
+            </div>
+            ${statusText ? `<div class="transfer-status">${statusText}</div>` : ''}
+        `;
+        
+        // 如果是AI发的转账，点击可以收款/退回
+        // 如果是我的转账，且有状态，则显示状态
+        // 这里添加点击事件，仅当我是接收方(role!=me) 且状态为pending时有效，或者我是发送方查看状态
+        // 简化逻辑：所有转账都用 pink-bubble 样式
+        // 长按菜单依旧保留
+        bubbleHtml = `<div class="bubble pink-bubble" data-idx="${index}"
+            ontouchstart="handleMsgTouchStart(event, ${index}, '${isMe?'user':'ai'}')" 
+            ontouchend="handleMsgTouchEnd()"
+            onclick="isMultiselectMode ? toggleMsgSelection(${index}) : handleTransferClick(${index}, ${isMe})">
+            ${inner} ${checkMarkHtml}
+        </div>`;
+
+    } else if (msgType === 'voice') {
+        let data = {};
+        try { data = JSON.parse(text); } catch(e) { data = { text: text, duration: '2"' }; }
+
+        const voiceInner = `
+            <div class="voice-bubble" onclick="toggleVoiceText(this)">
+                <svg class="voice-icon" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                <span class="voice-duration">${data.duration}</span>
+            </div>
+            <div class="voice-text-content">${data.text}</div>
+        `;
+        
+        bubbleHtml = `<div class="bubble pink-bubble" data-idx="${index}"
+            ontouchstart="handleMsgTouchStart(event, ${index}, '${isMe?'user':'ai'}')" ontouchend="handleMsgTouchEnd()"
+            onclick="isMultiselectMode ? toggleMsgSelection(${index}) : void(0)">
+            ${voiceInner} ${checkMarkHtml}
+        </div>`;
+
+    } else if (msgType === 'image') {
+        let data = {};
+        try { data = JSON.parse(text); } catch(e) { data = { desc: text }; }
+
+        const imgInner = `
+            <div class="bear-img-placeholder">
+                <div class="bear-svg-lg">${BEAR_SVG}</div>
+            </div>
+        `;
+        // 点击查看描述
+        bubbleHtml = `<div class="bubble img-bubble" data-idx="${index}"
+            onclick="isMultiselectMode ? toggleMsgSelection(${index}) : showImageDesc('${data.desc.replace(/'/g, "\\'")}')"
+            ontouchstart="handleMsgTouchStart(event, ${index}, '${isMe?'user':'ai'}')" ontouchend="handleMsgTouchEnd()">
+            ${imgInner} ${checkMarkHtml}
+        </div>`;
+    
+    } else if (msgType === 'emoticon') {
+        let data = {};
+        try { data = JSON.parse(text); } catch(e) { data = { url: '', name: '表情' }; }
+
+        const emoInner = `
+            <img src="${data.url}" class="emo-img" onerror="this.src='https://via.placeholder.com/100x100?text=Error'">
+        `;
+        
+        bubbleHtml = `<div class="bubble emo-bubble" data-idx="${index}"
+            ontouchstart="handleMsgTouchStart(event, ${index}, '${isMe?'user':'ai'}')" ontouchend="handleMsgTouchEnd()"
+            onclick="isMultiselectMode ? toggleMsgSelection(${index}) : void(0)">
+            ${emoInner} ${checkMarkHtml}
+        </div>`;
+
+    } else {
+        // 普通文本 (text)
+        const cleanText = text.replace(/\n/g, '<br>');
+        let innerHtml = '';
+        if (quoteData) {
+            innerHtml += `<div class="reply-block"><div class="reply-sender">${quoteData.sender}</div><div class="reply-text">${quoteData.text}</div></div>`;
+        }
+        innerHtml += cleanText;
+        bubbleHtml = `<div class="bubble" data-idx="${index}"
+            ontouchstart="handleMsgTouchStart(event, ${index}, '${isMe?'user':'ai'}')" ontouchend="handleMsgTouchEnd()"
+            onclick="isMultiselectMode ? toggleMsgSelection(${index}) : void(0)">
+            ${innerHtml} ${checkMarkHtml}
+        </div>`;
+    }
+    
+    row.innerHTML = avatarBox + bubbleHtml;
+    msgContainer.appendChild(row);
+    scrollToBottom();
+
+    if(save && currentChar) {
+        // 注意：如果是特殊消息，appendSpecialMsg 已经存过了，这里通常是手动发普通消息才 save=true
+        // 为兼容原有逻辑，如果是普通文本且 save=true，则保存
+        if (msgType === 'text') {
+            currentChar.history.push({ 
+                role: isMe ? 'user' : 'assistant', 
+                content: text, 
+                timestamp: Date.now(),
+                quoteData: quoteData
+            });
+            saveData();
+            scrollToBottom();
+        }
+    }
+}
+
+        function scrollToBottom() { setTimeout(() => { msgContainer.scrollTop = msgContainer.scrollHeight; }, 10); }
+
+        function openStatusEdit() {
+            const current = currentChar.currentStatus || "在线";
+            document.getElementById('statusInput').value = current;
+            document.getElementById('statusModal').style.display = 'flex';
+        }
+        async function saveStatus() {
+            const newVal = document.getElementById('statusInput').value.trim();
+            if (newVal) {
+                currentChar.currentStatus = newVal;
+                await saveData();
+                renderChat(activeChatId);
+            }
+            document.getElementById('statusModal').style.display = 'none';
+        }
+        function viewRecalledContent(content) {
+            document.getElementById('recallContentText').innerText = content;
+            document.getElementById('recallViewModal').style.display = 'flex';
+        }
+
+        function handleAvatarClick(e) {
+            e.stopPropagation();
+            if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; openThoughtsModal(); } 
+            else { clickTimer = setTimeout(() => { openPatModal(); clickTimer = null; }, 300); }
+        }
+        function handleMsgTouchStart(e, index, type) { longPressTimer = setTimeout(() => { showContextMenu(e, index, type); }, 600); }
+        function handleMsgTouchEnd() { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }
+        
+        function showContextMenu(e, index, type) {
+            if(navigator.vibrate) navigator.vibrate(50);
+            selectedMsgIndex = index;
+            const touch = e.touches ? e.touches[0] : e;
+            const menuFrame = document.getElementById('menuFrame');
+            menuFrame.classList.add('active');
+            menuFrame.contentWindow.postMessage({
+                action: 'open',
+                x: touch.clientX,
+                y: touch.clientY,
+                screenW: window.innerWidth,
+                screenH: window.innerHeight
+            }, '*');
+        }
+
+        function menuAction(action) {
+            document.getElementById('menuFrame').classList.remove('active');
+            if(!currentChar || selectedMsgIndex === -1) return;
+            const msg = currentChar.history[selectedMsgIndex];
+
+            if(action === 'copy') { navigator.clipboard.writeText(msg.content); }
+            else if(action === 'edit') { 
+                const editInput = document.getElementById('editMsgInput');
+                editInput.value = msg.content; 
+                document.getElementById('editMsgModal').style.display = 'flex'; 
+                
+                // --- 新增：打开时自动调整高度 ---
+                // 先重置高度，再根据内容计算
+                editInput.style.height = 'auto';
+                editInput.style.height = (editInput.scrollHeight) + 'px';
+                // 让光标自动聚焦
+                setTimeout(() => editInput.focus(), 50);
+            }
+            else if(action === 'recall') { handleRecall(currentChar, selectedMsgIndex, msg); }
+            else if(action === 'quote') {
+                const senderName = (msg.role === 'user') ? '我' : currentChar.name;
+                quotingContent = { sender: senderName, text: msg.content };
+                document.getElementById('quoteText').innerText = `引用 ${senderName}: ${msg.content}`;
+                document.getElementById('quoteBar').style.display = 'flex';
+            }
+            else if(action === 'multi') {
+                enterMultiselectMode();
+            }
+        }
+
+        // --- 多选模式逻辑 ---
+function enterMultiselectMode() {
+    isMultiselectMode = true;
+    selectedMsgIndices.clear();
+    document.body.classList.add('multiselect-mode');
+    
+    // 加载多选操作栏
+    const multiFrame = document.getElementById('multiFrame');
+    if(!multiFrame.getAttribute('src')) multiFrame.src = 'qq_multiselect.html';
+    multiFrame.classList.add('active');
+    
+    // 默认选中触发菜单的那一条
+    if(selectedMsgIndex !== -1) {
+        toggleMsgSelection(selectedMsgIndex);
+    }
+}
+
+function exitMultiselectMode() {
+    isMultiselectMode = false;
+    selectedMsgIndices.clear();
+    document.body.classList.remove('multiselect-mode');
+    document.getElementById('multiFrame').classList.remove('active');
+    
+    // 清除所有选中视觉效果
+    document.querySelectorAll('.bubble').forEach(b => b.classList.remove('selected'));
+}
+
+// 切换消息选中状态
+function toggleMsgSelection(realIndex) {
+    if(!isMultiselectMode) return;
+    
+    // 找到对应的DOM元素 (因为有分页，需要根据 realIndex 反查或简单遍历)
+    // 简单做法：遍历 DOM 找到对应的 index 属性
+    // 注意：我们在 renderChat 的时候需要给 bubble 加一个 id 或 data-index
+    // 为了方便，我们在 appendBubble 时给 bubble 加个 onclick 处理
+    
+    const targetBubble = document.querySelector(`.bubble[data-idx="${realIndex}"], .sys-bubble[data-idx="${realIndex}"]`);
+    if(targetBubble) {
+        if(selectedMsgIndices.has(realIndex)) {
+            selectedMsgIndices.delete(realIndex);
+            targetBubble.classList.remove('selected');
+        } else {
+            selectedMsgIndices.add(realIndex);
+            targetBubble.classList.add('selected');
+        }
+    }
+}
+
+// 处理来自 iframe (qq_multiselect.html) 的指令
+window.handleMultiAction = async function(action) {
+    if(selectedMsgIndices.size === 0 && action !== 'cancel') {
+        alert("请至少选择一条消息"); return;
+    }
+    
+    // 获取选中的消息索引并排序
+    const sortedIndices = Array.from(selectedMsgIndices).sort((a,b) => a-b);
+    const selectedMsgs = sortedIndices.map(idx => currentChar.history[idx]);
+
+    if(action === 'cancel') {
+        exitMultiselectMode();
+    } 
+    else if(action === 'delete') {
+        if(!confirm("确定删除选中的消息吗？")) return;
+        // 从后往前删
+        sortedIndices.reverse().forEach(idx => {
+            currentChar.history.splice(idx, 1);
+        });
+        saveData();
+        renderChat(activeChatId);
+        exitMultiselectMode();
+    }
+    else if(action === 'screenshot') {
+        // --- 长截图核心逻辑 Start ---
+        // 1. 退出多选模式(去掉勾选框)
+        exitMultiselectMode();
+        
+        // 2. 创建临时容器用于截图
+        const tempContainer = document.createElement('div');
+        tempContainer.style.cssText = "position:absolute; top:0; left:0; width:100%; background:#f2f2f6; z-index:-9999; overflow:visible;";
+        document.body.appendChild(tempContainer);
+
+        // 3. 克隆头部 (Header)
+        const headerClone = document.querySelector('.chat-header').cloneNode(true);
+        headerClone.style.position = 'static'; // 改为静态定位，防止重叠
+        headerClone.style.height = 'auto';
+        tempContainer.appendChild(headerClone);
+
+        // 4. 克隆选中的消息 (Body)
+        const bodyClone = document.createElement('div');
+        bodyClone.className = 'chat-body';
+        bodyClone.style.padding = '20px'; 
+        bodyClone.style.overflow = 'visible';
+        bodyClone.style.height = 'auto';
+
+        // 遍历所有气泡，找到刚才选中的那些 (通过 data-idx 匹配)
+        // 注意：因为我们已经退出了多选模式，selectedMsgIndices 已清空，
+        // 所以我们需要用 sortedIndices 这个之前存好的变量
+        const allBubbles = document.querySelectorAll('.msg-row');
+        sortedIndices.forEach(idx => {
+            // 找到对应的 DOM 节点（这里假设 renderChat 顺序没变，虽然有分页，但通常是对的）
+            // 更严谨的方法是 appendBubble 时加了 data-idx。我们这里尝试通过 querySelector 找
+            const targetRow = document.querySelector(`.bubble[data-idx='${idx}']`)?.closest('.msg-row');
+            if (targetRow) {
+                const rowClone = targetRow.cloneNode(true);
+                // 确保克隆出来的没有勾选框样式
+                rowClone.querySelectorAll('.check-mark').forEach(el => el.style.display = 'none');
+                rowClone.querySelectorAll('.bubble').forEach(el => el.classList.remove('selected'));
+                bodyClone.appendChild(rowClone);
+            }
+        });
+        tempContainer.appendChild(bodyClone);
+
+        // 5. 克隆底部 (Input Bar)
+        const footerClone = document.querySelector('.input-bar-wrap').cloneNode(true);
+        footerClone.style.position = 'static';
+        tempContainer.appendChild(footerClone);
+
+        // 6. 开始截图
+        setTimeout(() => {
+            html2canvas(tempContainer, {
+                useCORS: true,
+                scrollY: 0,
+                scale: 2 // 提高清晰度
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `chat_long_screenshot_${Date.now()}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+                document.body.removeChild(tempContainer); // 清理
+            }).catch(e => {
+                alert("截图生成失败");
+                console.error(e);
+                document.body.removeChild(tempContainer);
+            });
+        }, 500); 
+        // --- 长截图核心逻辑 End ---
+    }
+    else if(action === 'forward') {
+        openForwardModal(selectedMsgs);
+    }
+    else if(action === 'collect') {
+        // 保存到收藏 (需要保存真实姓名)
+        const senderName = currentChar.trueName || currentChar.name;
+        // 【修改点】：判断如果是系统消息或撤回消息，名字设为 "系统"
+        const msgsWithNames = selectedMsgs.map(m => {
+            let nameStr = (m.role === 'user') ? '我' : senderName;
+            if (m.role === 'system' || m.isRecall) nameStr = '系统'; // 新增这行
+            
+            return {
+                ...m,
+                senderName: nameStr
+            };
+        });
+
+        const collectData = {
+            id: Date.now(),
+            charName: currentChar.name,
+            msgs: msgsWithNames, 
+            date: new Date().toLocaleString()
+        };
+        const allCollects = JSON.parse(await dbGet('qq_collect_data') || '[]');
+        allCollects.unshift(collectData);
+        await dbSet('qq_collect_data', JSON.stringify(allCollects));
+        alert("已添加到收藏");
+        exitMultiselectMode();
+    }
+};
+
+// --- 转发逻辑 ---
+function openForwardModal(msgs) {
+    const listDiv = document.getElementById('forwardCharList');
+    listDiv.innerHTML = '';
+    
+    // 过滤掉自己(当前角色)，列出其他角色
+    // 也可包含自己
+    characters.forEach(c => {
+        const item = document.createElement('div');
+        item.style.cssText = "display:flex; align-items:center; gap:10px; padding:10px; background:#f5f5f7; border-radius:10px; cursor:pointer;";
+        item.innerHTML = `
+            <img src="${c.avatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
+            <div style="font-weight:600; color:#333;">${c.name}</div>
+        `;
+        item.onclick = () => confirmForward(c, msgs);
+        listDiv.appendChild(item);
+    });
+    
+    document.getElementById('forwardSelectModal').style.display = 'flex';
+}
+
+async function confirmForward(targetChar, msgs) {
+    if(!confirm(`确定转发给 ${targetChar.name} 吗？`)) return;
+    
+    // 获取当前对话角色的“本名”
+    // 如果没有 trueName，就用 name
+    const charTrueName = currentChar.trueName || currentChar.name;
+
+    // 构建带有具体发送者名字的消息数组
+    const processedMsgs = msgs.map(m => {
+        let contentStr = m.content;
+        // 如果是特殊消息，简略显示
+        if(m.msgType && m.msgType !== 'text') {
+            try {
+                // 尝试解析 JSON 获取描述，或者直接用类型名
+                const d = JSON.parse(m.content);
+                if(m.msgType==='image') contentStr = '[图片]';
+                else if(m.msgType==='voice') contentStr = '[语音]';
+                else if(m.msgType==='transfer') contentStr = `[转账 ¥${d.amount}]`;
+                else if(m.msgType==='emoticon') contentStr = `[表情: ${d.name}]`;
+            } catch(e) { contentStr = `[${m.msgType}]`; }
+        }
+
+        let finalSenderName = (m.role === 'user') ? '我' : charTrueName;
+        if (m.role === 'system' || m.isRecall) finalSenderName = '系统'; // 新增这行
+
+        return {
+            role: m.role, // 保留 role 方便后续逻辑判断颜色等
+            senderName: (m.role === 'user') ? '我' : charTrueName, // 关键：这里写入本名
+            content: contentStr,
+            msgType: m.msgType || 'text'
+        };
+    });
+
+    // 生成预览文本
+    const summary = processedMsgs.slice(0, 2).map(m => `${m.senderName}: ${m.content}`).join('\n');
+    
+    // 卡片数据结构
+    const cardData = {
+        sourceName: currentChar.name, // 卡片标题还是显示当前的聊天对象名(可能是备注)
+        msgs: processedMsgs,
+        preview: summary
+    };
+    
+    // 存入 pending，跳转后发送
+    await dbSet('pending_forward_msg', JSON.stringify({
+        targetId: targetChar.id,
+        content: JSON.stringify(cardData)
+    }));
+    
+    document.getElementById('forwardSelectModal').style.display = 'none';
+    exitMultiselectMode();
+    
+    // 跳转
+    window.location.href = `chat_window.html?id=${targetChar.id}`;
+}
+
+// --- 卡片点击查看逻辑 ---
+function viewCardContent(jsonContent, isCollect) {
+    try {
+        const data = JSON.parse(jsonContent);
+        const listDiv = document.getElementById('cardViewList');
+        const modal = document.getElementById('cardViewModal');
+        const titleDiv = document.getElementById('cardViewTitle');
+        
+        listDiv.innerHTML = '';
+        titleDiv.innerText = isCollect ? "收藏详情" : `与 ${data.sourceName || '某人'} 的聊天记录`;
+        titleDiv.style.color = isCollect ? "#FF6B81" : "#333";
+        
+        if (isCollect) modal.classList.add('pat-glow'); 
+        else modal.classList.remove('pat-glow');
+
+        // 遍历渲染每一条消息
+        data.msgs.forEach(m => {
+            const row = document.createElement('div');
+            // 白色圆角方框样式
+            row.style.cssText = "padding:12px; background:#fff; border-radius:12px; font-size:15px; color:#333; border:1px solid #f0f0f0; display:flex; flex-direction:column; gap:4px; margin-bottom: 8px;";
+            
+            // 获取发送者名字 (优先读取 saved senderName)
+            // 如果是老数据没有 senderName，则回退到 role 判断
+            let displayName = m.senderName;
+            if (!displayName) {
+                displayName = (m.role === 'user') ? '我' : (data.sourceName || '对方');
+            }
+
+            // 发送者名字样式 (灰色小字，左上角)
+            const nameDiv = `<div style="font-size:12px; color:#999; font-weight:500;">${displayName}</div>`;
+            
+            // 内容
+            let contentDiv = `<div style="line-height:1.4;">${m.content}</div>`;
+
+            row.innerHTML = nameDiv + contentDiv;
+            listDiv.appendChild(row);
+        });
+        
+        modal.style.display = 'flex';
+    } catch(e) { console.error("解析卡片失败", e); }
+}
+
+        function confirmEditMsg() {
+            // 获取值，保留换行符，但去掉首尾空格
+            const newVal = document.getElementById('editMsgInput').value.trim();
+            if(newVal && currentChar && selectedMsgIndex !== -1) {
+                currentChar.history[selectedMsgIndex].content = newVal;
+                saveData(); 
+                renderChat(activeChatId);
+            }
+            document.getElementById('editMsgModal').style.display = 'none';
+        }
+
+        async function handleRecall(char, index, msg) {
+            char.history[index] = { role: msg.role, content: '消息已撤回', timestamp: msg.timestamp, isRecall: true, recalledContent: msg.content };
+            await saveData(); renderChat(activeChatId);
+        }
+
+        function cancelQuote() { quotingContent = null; document.getElementById('quoteBar').style.display = 'none'; }
+
+        function openPatModal() {
+            if(!currentChar) return;
+            document.getElementById('patTargetName').innerText = currentChar.name;
+            document.getElementById('patSuffixInput').value = "";
+            document.getElementById('patModal').style.display = 'flex';
+            setTimeout(()=>document.getElementById('patSuffixInput').focus(), 100);
+        }
+        
+        function sendPat(isFromAI = false, suffix = "") {
+            if(!currentChar) return;
+            let text = "";
+            if (isFromAI) {
+                // 修改点：强制显示用户昵称
+                // 获取用户昵称，如果没有则默认为"你"
+                const targetName = currentChar.userNickName || "你";
+                
+                // 如果后缀为空，只是"拍了拍XXX"
+                if (!suffix) {
+                    text = `${currentChar.name} 拍了拍 “${targetName}”`;
+                } else {
+                    // 如果有后缀，处理一下格式，变成 "角色名 拍了拍 “用户昵称” 后缀"
+                    // 去掉后缀可能自带的"拍了拍"字样，避免重复
+                    let cleanSuffix = suffix.replace(/^拍了拍/, '').trim();
+                    text = `${currentChar.name} 拍了拍 “${targetName}” ${cleanSuffix}`;
+                }
+            } else {
+                const inputSuffix = document.getElementById('patSuffixInput').value.trim();
+                text = `我拍了拍“${currentChar.name}”${inputSuffix}`;
+                document.getElementById('patModal').style.display = 'none';
+            }
+            currentChar.history.push({ role: 'system', content: text, timestamp: Date.now() });
+            saveData(); 
+            renderChat(activeChatId);
+        }
+
+        async function aiPerformRecall() {
+            if(!currentChar || currentChar.history.length === 0) return;
+            let lastAiMsgIndex = -1;
+            for (let i = currentChar.history.length - 1; i >= 0; i--) {
+                if (currentChar.history[i].role === 'assistant' && !currentChar.history[i].isRecall) {
+                    lastAiMsgIndex = i;
+                    break;
+                }
+            }
+            if (lastAiMsgIndex !== -1) { await handleRecall(currentChar, lastAiMsgIndex, currentChar.history[lastAiMsgIndex]); }
+        }
+
+        function aiChangeStatus(newStatus) {
+            if(!currentChar || !newStatus) return;
+            currentChar.currentStatus = newStatus;
+            saveData(); renderChat(activeChatId);
+        }
+
+        function openThoughtsModal() {
+            if(!currentChar) return;
+            document.getElementById('currentThoughtsView').classList.remove('hidden');
+            document.getElementById('historyThoughtsView').classList.remove('active');
+            const latest = (currentChar.thoughtsHistory && currentChar.thoughtsHistory.length > 0) ? currentChar.thoughtsHistory[currentChar.thoughtsHistory.length - 1] : { status: "发呆中", outfit: "便服", mind: "..." };
+            document.getElementById('thoughtStatus').innerText = latest.status;
+            document.getElementById('thoughtOutfit').innerText = latest.outfit;
+            document.getElementById('thoughtMind').innerText = latest.mind;
+            document.getElementById('thoughtsModal').style.display = 'flex';
+        }
+
+        function toggleThoughtsHistory() {
+            if(!currentChar) return;
+            const currentView = document.getElementById('currentThoughtsView');
+            const historyView = document.getElementById('historyThoughtsView');
+            if (historyView.classList.contains('active')) {
+                historyView.classList.remove('active'); currentView.classList.remove('hidden');
+            } else {
+                currentView.classList.add('hidden'); historyView.classList.add('active');
+                historyView.innerHTML = '';
+                const list = currentChar.thoughtsHistory || [];
+                [...list].reverse().forEach(t => {
+                    const item = document.createElement('div'); item.className = 'history-item';
+                    const timeStr = new Date(t.timestamp).toLocaleString();
+                    item.innerHTML = `<div class="h-time">${timeStr}</div><div class="h-content"><b>状态:</b> ${t.status}</div><div class="h-content"><b>穿搭:</b> ${t.outfit}</div><div class="h-content" style="color:#007AFF">"${t.mind}"</div>`;
+                    historyView.appendChild(item);
+                });
+            }
+        }
+
+        function sendUserMsg() {
+            let text = msgInput.value.trim();
+            if(!text) return;
+            if(currentChar) {
+                const lastMsg = currentChar.history[currentChar.history.length - 1];
+                const lastTime = lastMsg ? (lastMsg.timestamp || 0) : 0;
+                if (Date.now() - lastTime > TIME_INTERVAL) { appendTime(Date.now()); }
+                // 传正确的index
+                appendBubble(text, true, currentChar.history.length, true, quotingContent);
+            }
+            cancelQuote(); 
+            msgInput.value = '';
+        }
+
+        async function triggerAiReply() {
+            if(!currentChar) return;
+            // 1. 优先读取 settings.html 保存的“当前生效配置” (qq_ai_config)
+            let config = await dbGet('qq_ai_config');
+
+            // 2. 兼容旧逻辑：如果没读到新配置(比如还没去过设置页)，尝试读取旧的预设列表
+            if (!config) {
+                const rawPresets = await dbGet('aiPhone_presets');
+                const currentId = await dbGet('aiPhone_currentId');
+                // 注意：旧版 savePresets 可能存的是字符串，也可能是对象，这里做一下兼容
+                if (rawPresets && currentId) { 
+                    try { 
+                        const list = (typeof rawPresets === 'string') ? JSON.parse(rawPresets) : rawPresets;
+                        config = list.find(p => p.id == currentId); 
+                    } catch(e) {} 
+                }
+            }
+            if(!config || !config.url || !config.key) {
+                document.getElementById('errorMsgText').innerText = "API 未连接"; document.getElementById('errorModal').style.display = 'flex'; return;
+            }
+
+            const originalName = document.getElementById('currentChatTitle').innerText;
+            document.getElementById('currentChatTitle').innerText = "对方正在输入...";
+            document.getElementById('currentChatTitle').classList.add('typing');
+            document.getElementById('replyBtn').disabled = true;
+
+            let cleanUrl = config.url.trim().replace(/\/+$/, ''); // 去空格，去末尾斜杠
+            let fetchUrl = '';
+            if (cleanUrl.endsWith('/v1')) {
+                fetchUrl = cleanUrl + '/chat/completions';
+            } else if (cleanUrl.endsWith('/chat/completions')) {
+                fetchUrl = cleanUrl;
+            } else {
+                fetchUrl = cleanUrl + '/v1/chat/completions'; // 默认补全
+            }
+            
+            // --- 1. 构建 Prompt ---
+            let sysContent = `角色扮演指令：\n`;
+            const musicStateRaw = await dbGet('qq_music_current_state');
+            if (musicStateRaw) {
+                try {
+                    const musicState = JSON.parse(musicStateRaw);
+                    // 只有当正在播放，且一起听的对象是当前角色时，才注入信息
+                    const listenId = await dbGet('qq_current_listen_id');
+                    if (musicState.isPlaying && listenId === activeChatId) {
+                        sysContent += `\n【当前状态：你们正在一起听歌】\n`;
+                        sysContent += `正在播放的歌曲: 《${musicState.title}》\n`;
+                        sysContent += `歌手: ${musicState.artist}\n`;
+                        sysContent += `注意：这首歌是你们一起听的背景音乐，不要产生幻觉说是你自己唱的，也不要说这是你的歌，除非歌手名字真的是你。如果用户评论歌曲，请根据歌曲风格和歌词内容进行自然互动。\n`;
+                    }
+                } catch(e) {}
+            }
+            // 昵称逻辑：这里明确告诉AI，它对用户的称呼是 userNickName
+            sysContent += `你的真名: ${currentChar.trueName || currentChar.name}。\n`;
+
+            // ==================== 【这里是新加的状态感知代码 开始】 ====================
+            // 读取用户档案
+            const userProfile = JSON.parse(await dbGet('qq_user_profile') || '{"status":"在线","id":"Buzzy520"}');
+            const currentUserStatus = userProfile.status || '在线';
+            const userDisplayId = userProfile.id || 'Buzzy520';
+
+            // 状态变更检测逻辑
+            // 如果 lastReactedUserStatus 不存在，说明是第一次聊，或者之前没记录过，初始化为空
+            if (typeof currentChar.lastReactedUserStatus === 'undefined') {
+                currentChar.lastReactedUserStatus = ''; 
+            }
+
+            // 对比当前状态和上次反应过的状态
+            if (currentUserStatus !== currentChar.lastReactedUserStatus) {
+                // 状态变了！添加强系统指令
+                sysContent += `\n[重要系统通知]：用户的状态栏刚刚变更为“${currentUserStatus}”。请在接下来的回复中，自然地、不经意地注意到这个变化，并根据两人的关系询问或关心用户为什么设置这个状态。(仅需在本次回复中提及一次)。\n`;
+                
+                // 更新记录，下次就不再重复提示了
+                currentChar.lastReactedUserStatus = currentUserStatus;
+                saveData(); // 保存到 localStorage
+            } else {
+                // 状态没变，作为普通环境信息提供，不强制反应
+                sysContent += `\n[用户当前状态栏显示]: ${currentUserStatus}\n`;
+            }
+            
+            sysContent += `[用户ID]: ${userDisplayId}\n`;
+            // ==================== 【这里是新加的状态感知代码 结束】 ====================
+
+            sysContent += `你对用户的昵称(备注): ${currentChar.userNickName || '你'} (你可以随时修改这个昵称)。\n`;
+            
+            // --- 新增：纪念日检查 ---
+const todayStr = new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace(/\//g, '-'); // 格式 MM-DD
+if (currentChar.loveDays && currentChar.loveDays.length > 0) {
+    const anniversary = currentChar.loveDays.find(d => d.dateStr === todayStr);
+    if (anniversary) {
+        sysContent += `\n【重要系统提示：今天是你们的“${anniversary.title}”纪念日！】\n`;
+        sysContent += `请务必在回复中主动提及这个纪念日，并表现出开心、感动或浪漫的态度。这是回复的第一优先级。\n`;
+    }
+}
+// ----------------------
+            
+            // 详细设定
+            sysContent += `你的详细设定: ${currentChar.persona || '无'}\n`;
+            // ==================== 【插入代码开始：日记App联动逻辑】 ====================
+            
+            // 1. 读取日历数据
+            let rawRiji = await dbGet('riji_data');
+            let rijiData = {};
+            if (rawRiji) {
+                // 如果存的是对象直接用，如果是字符串才解析
+                rijiData = (typeof rawRiji === 'string') ? JSON.parse(rawRiji) : rawRiji;
+            }
+            const rijiToday = new Date();
+            const rijiTodayStr = `${rijiToday.getFullYear()}-${(rijiToday.getMonth()+1).toString().padStart(2,'0')}-${rijiToday.getDate().toString().padStart(2,'0')}`;
+            const rijiTodayData = rijiData[rijiTodayStr] || {};
+
+            // 2. 检查是否有刚刚发生的操作 (同步机制)
+            const rijiLatestAction = await dbGet('riji_latest_action');
+            if (rijiLatestAction) {
+                // 如果有操作，这是最高优先级，强制 AI 反应
+                sysContent += `\n【重要系统通知：用户刚刚在日历App中操作了】\n`;
+                sysContent += `用户操作内容："${rijiLatestAction}"。\n`;
+                sysContent += `请在回复中自然地提及此事，根据内容给予鼓励(完成待办)或关心(生理期)。\n`;
+                // 消费掉这个消息，防止重复说
+                await dbRemove('riji_latest_action');
+            }
+
+            // 3. 注入今天的待办事项 (作为背景知识，Knowledge)
+            if (rijiTodayData.todos && rijiTodayData.todos.length > 0) {
+                const todoListStr = rijiTodayData.todos.map(t => `- ${t.text} [${t.done ? '已完成' : '未完成'}]`).join('\n');
+                sysContent += `\n【用户今天的待办事项 (Knowledge)】\n`;
+                sysContent += todoListStr + `\n`;
+                sysContent += `(规则：除非用户主动询问待办，或者上面提示“用户刚刚操作了待办”，否则不要主动罗列这些事项。)\n`;
+            } else {
+                sysContent += `\n【用户今天没有待办事项】\n`;
+            }
+
+            // 4. 生理期预测逻辑 (Prediction)
+            // 算法：寻找上个月的生理期开始日。
+            // 简单逻辑：遍历所有日期，找到最近的一个“上个月”的记录。
+            // 假设：周期按 28-30 天估算。用户说“到了上个月生理期第一天的前一天和前两天”。
+            // 理解：如果上个月23号来的，这个月21号或22号就要提醒。
+            
+            // 提取所有有生理期记录的日期
+            const periodDates = Object.keys(rijiData).filter(d => rijiData[d].period).sort();
+            if (periodDates.length > 0) {
+                // 找上个月的记录
+                // 我们倒序找，找到第一个月份不等于当前月份的日期
+                let lastMonthStartDay = -1;
+                
+                for (let i = periodDates.length - 1; i >= 0; i--) {
+                    const pDate = new Date(periodDates[i]);
+                    // 如果这个记录的月份 < 当前月份 (或者年份更小)
+                    // 简单的判断：只要不是当前月
+                    if (pDate.getMonth() !== rijiToday.getMonth()) {
+                        // 且距离今天不超过45天(避免取到很久以前的数据)
+                        const diffTime = Math.abs(rijiToday - pDate);
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                        if (diffDays < 40) {
+                            lastMonthStartDay = pDate.getDate(); // 获取那是几号 (比如23号)
+                            break; 
+                        }
+                    }
+                }
+
+                if (lastMonthStartDay !== -1) {
+                    const todayDay = rijiToday.getDate();
+                    // 逻辑：到了上个月日期的前一天(day-1) 或 前两天(day-2)
+                    // 比如上个月23号，今天如果是 21 或 22
+                    if (todayDay === (lastMonthStartDay - 1) || todayDay === (lastMonthStartDay - 2)) {
+                        sysContent += `\n【重要生理期预警】\n`;
+                        sysContent += `系统检测到：用户上个月是 ${lastMonthStartDay} 号来的生理期。今天是 ${todayDay} 号，马上要到日子了。\n`;
+                        sysContent += `请务必在回复中提醒用户生理期快到了，注意身体，保持温暖，不要吃生冷。语气要温柔关心，不要OOC。\n`;
+                    }
+                }
+            }
+            // ==================== 【插入代码结束】 ====================
+
+            sysContent += `用户(我)的真实设定: ${currentChar.userPersona || '无'}\n`;
+
+            if (currentChar.isOfflineMode) {
+    const is3rd = currentChar.offlinePerspective === '3rd';
+    sysContent += `\n【当前模式：线下跑团/小说模式 (Offline Mode)】\n`;
+    sysContent += `禁止OOC。请严格遵循世界观与人设。\n`;
+    
+    if (is3rd) {
+        sysContent += `人称视角：第三人称 (Third Person)。\n`;
+        sysContent += `规则：请用 "${currentChar.trueName || currentChar.name}" 指代自己，用 "${currentChar.userPersona ? '用户名字' : '用户'}" 指代用户。请勿使用“你”或“我”进行叙述（对话中的自称除外）。\n`;
+    } else {
+        sysContent += `人称视角：第二人称 (Second Person)。\n`;
+        sysContent += `规则：请用“你”指代用户(User)，用 "${currentChar.trueName || currentChar.name}" 或 "他/她" 指代自己。当提到你们两人时使用“你们”。\n`;
+    }
+
+    sysContent += `\n【重要格式要求】：\n`;
+    sysContent += `为了区分“动作/旁白”和“语言”，请务必遵守：\n`;
+    sysContent += `1. 所有的动作、神态描写、环境描写，必须包裹在 {{ACTION:描写内容}} 标签中。\n`;
+    sysContent += `2. 角色说出的对白，请直接写，不要加任何标签。\n`;
+    sysContent += `   示例：{{ACTION:他轻轻叹了口气，把手里的烟掐灭}} 这件事我不能答应你。{{ACTION:看着你的眼睛}} 除非你求我。\n`;
+}
+// --- 新增：双语模式指令 (独立逻辑) ---
+            if (currentChar.bilingualMode) {
+                sysContent += `\n【双语模式 (Bilingual Mode) 已开启】\n`;
+                sysContent += `规则：角色的对话气泡必须包含“原文”和“中文翻译”两部分，中间使用HTML标签 <hr> 分隔。\n`;
+                sysContent += `格式示例：Hola, amigo.<hr>你好，朋友。\n`;
+                sysContent += `注意：\n`;
+                sysContent += `1. 如果原文就是中文，则不需要翻译，也不要加 <hr>。\n`;
+                sysContent += `2. 无论是否处于线下模式，仅翻译角色说的话(Dialogue)。如果使用了 {{ACTION:...}} 描写动作，动作部分保持原样，不要翻译。\n`;
+            }
+            
+            // 世界书 (World Book) - 修改版：支持多选读取
+            // 兼容旧数据：如果只有 worldBookId (单数)，也放入数组处理
+            let activeBookIds = currentChar.worldBookIds || [];
+            if (currentChar.worldBookId && !activeBookIds.includes(currentChar.worldBookId)) {
+                activeBookIds.push(currentChar.worldBookId);
+            }
+
+            if(activeBookIds.length > 0) {
+                const allBooks = JSON.parse(await dbGet('wb_books') || '[]');
+                
+                // 遍历所有选中的世界书ID
+                activeBookIds.forEach(bId => {
+                    const book = allBooks.find(b => b.id == bId);
+                    if(book) {
+                        const activeEntries = book.entries.filter(e => e.active); // 只取启用的词条
+                        if(activeEntries.length > 0) {
+                            sysContent += `\n【世界观词条 (${book.name})】\n`;
+                            activeEntries.forEach(e => {
+                                // 必须读取到：将所有启用词条加入 Prompt
+                                sysContent += `- [${e.name}]: ${e.content}\n`;
+                            });
+                        }
+                    }
+                });
+            }
+
+            // 环境感知 (修正时间逻辑：严格按时区)
+            if(currentChar.timeSense) {
+                let timeStr = new Date().toLocaleString(); // 默认系统
+                if (currentChar.timeZoneValue) {
+                    try {
+                        timeStr = new Date().toLocaleString("zh-CN", {timeZone: currentChar.timeZoneValue});
+                    } catch(e) {
+                        console.error("Timezone error", e);
+                    }
+                }
+                sysContent += `[当前系统时间(严格): ${timeStr}]\n`; 
+                // 去掉了旧的 timeLocation 文本逻辑，完全依赖时区
+            }
+
+            // 环境感知 (修正天气逻辑：真实地名映射)
+            if(currentChar.weatherSense) {
+                const charReal = currentChar.charWeatherRealLoc || "";
+                const charVirtual = currentChar.charWeatherVirtualLoc || "此处";
+                
+                // 新增：读取用户虚拟名
+                const userReal = currentChar.userWeatherRealLoc || "";
+                const userVirtual = currentChar.userWeatherVirtualLoc || userReal || "你那边"; // 如果没填虚拟名，回落到真实名或通用词
+
+                sysContent += `[环境/天气感知]:\n`;
+                
+                // 角色部分
+                if(charReal) {
+                    sysContent += `- 你的位置: 设定在 "${charVirtual}" (真实物理坐标参考: "${charReal}")。请根据真实坐标的经纬度/气候/时令来描写环境。\n`;
+                }
+                
+                // 用户部分 (修改了这里)
+                if(userReal) {
+                    sysContent += `- 用户的位置: 设定在 "${userVirtual}" (真实物理坐标参考: "${userReal}")。\n`;
+                }
+                
+                sysContent += `- 注意: 请严格基于上述"真实物理坐标"的客观时间与气候进行感知，但对话中请使用"设定位置"的地名。\n`;
+            }
+
+            // 记忆库
+            if(currentChar.longTermMemories && currentChar.longTermMemories.length > 0) {
+                sysContent += `\n【长期记忆】\n`;
+                currentChar.longTermMemories.forEach((m, i) => sysContent += `${i+1}. ${m}\n`);
+            }
+
+            // 回复规则 (增加了特殊消息格式说明)
+            sysContent += `\n【核心规则】
+            1. 拟人化: 分段发送，用 ||| 分隔。
+            2. 口语化: 自然简短。
+            3. 功能指令:
+               - 拍一拍: {{PAT:后缀}}
+               - 撤回: {{RECALL}}
+               - 改状态: {{STATUS:新状态}}
+               - 改用户昵称: {{NICKNAME:新昵称}}
+               - 引用: {{QUOTE:内容}}
+            
+            【特殊功能格式 (Strict Format)】
+            1. 发语音: {{SEND_VOICE:语音文字内容}} (注意：严禁每轮都发语音，频率控制在30%以下。)
+            2. 发图片: {{SEND_IMAGE:图片画面详细描述}}
+            3. 发转账: {{SEND_TRANSFER:金额:备注}} (例如 {{SEND_TRANSFER:520:拿去买糖}})
+            4. 处理用户转账:
+               - 如果你想收下用户的转账，输出: {{ACCEPT_TRANSFER}}
+               - 如果你想退回用户的转账，输出: {{RETURN_TRANSFER}}
+            
+            [注意] 当收到系统消息提示“用户向你转账”时，请务必使用上述第4点指令进行处理。
+            `;
+
+            // --- 新增：读取并注入表情包信息 ---
+            const allEmoticonData = JSON.parse(await dbGet('qq_emoticon_db') || '{"categories":[],"bindings":{}}');
+            // 获取绑定给当前角色ID的分类ID列表
+            const boundCatIds = allEmoticonData.bindings[currentChar.id] || [];
+            
+            let availableEmoticons = [];
+            // 遍历所有分类，如果在绑定列表中，则收集该分类下的表情名
+            allEmoticonData.categories.forEach(cat => {
+                if (boundCatIds.includes(cat.id) && cat.items.length > 0) {
+                    // 为了防止Prompt过长，每个分类最多取前10个表情名作为示例，或者取全部
+                    // 这里我们只取名字，告诉AI它有什么库存
+                    cat.items.forEach(item => availableEmoticons.push(item.name));
+                }
+            });
+
+            // 只有当有绑定表情包时，才写入 Prompt
+            if (availableEmoticons.length > 0) {
+                // 去重
+                availableEmoticons = [...new Set(availableEmoticons)];
+                // 限制数量，防止 Token 爆炸 (例如随机选 30 个给它，或者全部如果不多)
+                const emoListStr = availableEmoticons.slice(0, 50).join(', ');
+                
+                sysContent += `\n【表情包系统】\n`;
+                sysContent += `你可以发送表情包。你拥有的表情包列表: [${emoListStr}] 等。\n`;
+                sysContent += `如果要发送表情包，请严格只输出指令: {{SEND_EMOTICON:表情包名字}}\n`;
+                sysContent += `请根据当前氛围、对话内容，适度、生动地使用表情包，不要滥用。\n`;
+            }
+            
+            // 历史记录处理 (上下文限制)
+            const limit = currentChar.shortMemCount || 20;
+            const rawHistory = currentChar.history.slice(-limit);
+            const messages = [{ role: "system", content: sysContent }];
+            
+            rawHistory.forEach(msg => {
+                let contentToSend = msg.content;
+                
+                // --- 特殊处理：如果用户或角色发送了表情包，转换成文字描述给 AI ---
+                if (msg.msgType === 'emoticon') {
+                    try {
+                        const emoData = JSON.parse(msg.content);
+                        contentToSend = `[发送了表情包: "${emoData.name}"]`;
+                    } catch(e) {}
+                }
+                // 同理处理图片
+                else if (msg.msgType === 'image') {
+                    contentToSend = `[发送了一张图片]`; 
+                }
+                // 处理转账
+                else if (msg.msgType === 'transfer') {
+                     try {
+                        const tData = JSON.parse(msg.content);
+                        contentToSend = `[发起转账: ${tData.amount}元, 备注: ${tData.note}]`;
+                    } catch(e) {}
+                }
+                // --- 【新增】处理转发卡片 ---
+                else if (msg.msgType === 'forward_card') {
+                    try {
+                        const fData = JSON.parse(msg.content);
+                        
+                        // 这里是核心修改：
+                        // 1. 遍历卡片里的消息列表 fData.msgs
+                        // 2. 优先读取 m.senderName (这是我们在第二步confirmForward里专门存进去的本名)
+                        // 3. 如果没有 senderName (旧数据)，才回退到用 role 判断
+                        let transcript = fData.msgs.map(m => {
+                            const name = m.senderName || (m.role === 'user' ? '我' : (fData.sourceName || '未知'));
+                            return `${name}: ${m.content}`;
+                        }).join('\n');
+                        
+                        // 4. 将拼接好的文本包装成系统提示发给 AI
+                        contentToSend = `[系统通知: 我转发了一条聊天记录给你。来源是“${fData.sourceName}”。记录内容如下:\n>>>\n${transcript}\n<<<\n请阅读上述聊天记录，并根据你的人设做出反应。]`;
+                    } catch(e) { 
+                        contentToSend = '[发送了一条聊天记录]'; 
+                    }
+                }
+
+                // --- 【新增】处理论坛转发文章 ---
+                else if (msg.msgType === 'forward' || msg.type === 'forward') {
+                    // 提取关键信息传给 AI
+                    // 格式：[转发帖子]\n标题: XX\n作者: XX\n摘要: XX...
+                    const rawTxt = msg.content;
+                    const title = rawTxt.match(/标题: (.*?)\n/)?.[1] || "无标题";
+                    const author = rawTxt.match(/作者: (.*?)\n/)?.[1] || "路人";
+                    // 提取摘要部分，去掉前缀
+                    const snippet = rawTxt.split('摘要: ')[1] || rawTxt;
+
+                    // 构造 Prompt，告诉 AI 这是一个帖子
+                    contentToSend = `[系统通知: 我转发了一篇论坛文章给你。
+                    文章标题: "${title}"
+                    文章作者: "${author}" (若是你本人的名字，请表现出惊讶或害羞；若是"我"的名字，请表现出关注)
+                    文章内容摘要: "${snippet}"
+                    请阅读以上内容，以第三人称视角(如果是同人文)或第一人称视角(如果是日常贴)进行评论和互动。]`;
+                }
+
+                // 接下来是生成 messages 数组的逻辑
+                if(msg.isRecall) {
+                    messages.push({ role: 'system', content: `[系统: ${msg.role==='user'?'用户':'你'} 撤回了一条消息]` });
+                } else if(msg.role === 'system') {
+                    messages.push({ role: 'system', content: `[系统消息: ${msg.content}]` });
+                } else {
+                    messages.push({ role: msg.role, content: contentToSend });
+                }
+            });
+
+            try {
+                const response = await fetch(fetchUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+                    body: JSON.stringify({ model: config.model || 'gpt-3.5-turbo', messages: messages, temperature: config.temperature || 0.8 })
+                });
+
+                document.getElementById('currentChatTitle').classList.remove('typing');
+                document.getElementById('currentChatTitle').innerText = originalName;
+                document.getElementById('replyBtn').disabled = false;
+
+                if (!response.ok) throw new Error("API Error");
+                const data = await response.json();
+                
+                if (data.choices && data.choices.length > 0) {
+                    const text = data.choices[0].message.content.trim();
+                    await parseAndExecuteAiResponse(text, config, messages);
+                    // 自动总结
+                    checkAutoSummary(config);
+                }
+            } catch (err) {
+                document.getElementById('currentChatTitle').classList.remove('typing');
+                document.getElementById('currentChatTitle').innerText = originalName;
+                document.getElementById('replyBtn').disabled = false;
+                document.getElementById('errorMsgText').innerText = "连接中断"; document.getElementById('errorModal').style.display = 'flex';
+            }
+        }
+
+        async function parseAndExecuteAiResponse(text, config, context) {
+            // 1. 解析 NICKNAME
+            const nickMatch = text.match(/{{NICKNAME:(.*?)}}/);
+            if (nickMatch) {
+                const newNick = nickMatch[1];
+                currentChar.userNickName = newNick; 
+                saveData(); 
+                currentChar.history.push({role:'system', content:`${currentChar.name} 将你的备注修改为 "${newNick}"`, timestamp: Date.now()});
+                renderChat(activeChatId); 
+                text = text.replace(nickMatch[0], '');
+            }
+
+            // 2. 解析 基础指令
+            if (text.includes('{{RECALL}}')) { aiPerformRecall(); text = text.replace('{{RECALL}}', ''); 
+            // --- 新增：撤回通知 ---
+                window.parent.postMessage({ type: 'new_msg_notify', chatId: currentChar.id, name: currentChar.name, avatar: currentChar.avatar, msg: '撤回了一条消息' }, '*');
+            chatChannel.postMessage({ type: 'new_msg_notify', chatId: currentChar.id, name: currentChar.name, avatar: currentChar.avatar, msg: '撤回了一条消息' });}
+
+            const statusMatch = text.match(/{{STATUS:(.*?)}}/);
+            if (statusMatch) { aiChangeStatus(statusMatch[1]); text = text.replace(statusMatch[0], ''); }
+            const patMatch = text.match(/{{PAT:(.*?)}}/);
+            if (patMatch) { sendPat(true, patMatch[1]); text = text.replace(patMatch[0], ''); 
+            // --- 新增：拍一拍通知 ---
+                // 获取昵称用于显示
+                const targetName = currentChar.userNickName || "你";
+                let patMsg = `${currentChar.name} 拍了拍 “${targetName}”`;
+                if(patMatch[1]) patMsg += " " + patMatch[1].replace(/^拍了拍/, '').trim();
+                window.parent.postMessage({ type: 'new_msg_notify', chatId: currentChar.id, name: currentChar.name, avatar: currentChar.avatar, msg: patMsg }, '*');
+            chatChannel.postMessage({ type: 'new_msg_notify', chatId: currentChar.id, name: currentChar.name, avatar: currentChar.avatar, msg: patMsg });}
+
+            // 4. 解析 图片 {{SEND_IMAGE:描述}}
+            const imgMatch = text.match(/{{SEND_IMAGE:(.*?)}}/);
+            if (imgMatch) {
+                appendSpecialMsg('image', { desc: imgMatch[1] }, false);
+                text = text.replace(imgMatch[0], '');
+                playSoundInstant();
+            }
+
+            // 5.5 解析 表情包 {{SEND_EMOTICON:名字}}
+            const emoMatch = text.match(/{{SEND_EMOTICON:(.*?)}}/);
+            if (emoMatch) {
+                const targetName = emoMatch[1].trim();
+                // 去数据库找对应的 URL
+                const allEmoDB = JSON.parse(await dbGet('qq_emoticon_db') || '{"categories":[],"bindings":{}}');
+                let foundUrl = null;
+                
+                // 简单的查找逻辑：遍历所有分类找名字匹配的
+                // 也可以限制只在绑定的分类里找，这里为了容错，全库查找
+                for (const cat of allEmoDB.categories) {
+                    const foundItem = cat.items.find(item => item.name === targetName);
+                    if (foundItem) {
+                        foundUrl = foundItem.url;
+                        break;
+                    }
+                }
+                
+                if (foundUrl) {
+                    appendSpecialMsg('emoticon', { url: foundUrl, name: targetName }, false);
+                }
+                text = text.replace(emoMatch[0], '');
+                playSoundInstant();
+            }
+
+            // 5. 解析 发起转账 {{SEND_TRANSFER:金额:备注}}
+            const transferMatch = text.match(/{{SEND_TRANSFER:([\d\.]+):?(.*?)}}/);
+            if (transferMatch) {
+                let amount = transferMatch[1];
+                let note = transferMatch[2] || '';
+                appendSpecialMsg('transfer', { amount: amount, note: note, status: 'pending' }, false);
+                text = text.replace(transferMatch[0], '');
+                playSoundInstant();
+            }
+
+            // 6. 解析 处理转账 (接收/退回)
+            if (text.includes('{{ACCEPT_TRANSFER}}')) {
+                aiProcessTransfer('accepted');
+                text = text.replace('{{ACCEPT_TRANSFER}}', '');
+            }
+            if (text.includes('{{RETURN_TRANSFER}}')) {
+                aiProcessTransfer('returned');
+                text = text.replace('{{RETURN_TRANSFER}}', '');
+            }
+
+            // =========================
+            // 这里是【线下模式】的新增逻辑
+            // =========================
+            if (currentChar.isOfflineMode && text.includes('{{ACTION:')) {
+                // 如果开启了线下模式，且AI返回了动作标签，我们使用新的拆分逻辑
+                const parts = text.split(/({{ACTION:.*?}})/g).filter(p => p.trim());
+                
+                let sequencePromise = Promise.resolve();
+
+                parts.forEach(part => {
+                    sequencePromise = sequencePromise.then(async () => {
+                        const actionMatch = part.match(/{{ACTION:(.*?)}}/);
+                        
+                        if (actionMatch) {
+                            // --- 情况A：这是动作 (生成灰色系统气泡) ---
+                            const actionContent = actionMatch[1].trim();
+                            if (actionContent) {
+                                currentChar.history.push({
+                                    role: 'system',
+                                    content: actionContent, // 动作内容
+                                    timestamp: Date.now()
+                                });
+                                saveData();
+                                renderChat(activeChatId);
+                                // 暂停 0.6秒，增加阅读节奏感
+                                await new Promise(r => setTimeout(r, 600));
+                            }
+                        } else {
+                            // --- 情况B：这是对话 (生成白色聊天气泡) ---
+                            // 对话依然支持 ||| 分段
+                            const subParts = part.split(/\|\|\||\n/).map(p => p.trim()).filter(p => p);
+                            for (let sub of subParts) {
+                                currentChar.history.push({
+                                    role: 'assistant',
+                                    content: sub,
+                                    timestamp: Date.now()
+                                });
+                                saveData();
+                                renderChat(activeChatId);
+                                playSoundInstant();
+                                // 模拟打字速度延迟
+                                await new Promise(r => setTimeout(r, 800 + sub.length * 50));
+                            }
+                        }
+                    });
+                });
+
+                // 全部播放完毕后，生成心声
+                sequencePromise.then(() => {
+                     generateThoughts(config, context, text); 
+                });
+
+                // --- 新增代码：给主页发通知，产生弹窗 ---
+                // 提取第一段内容作为提示词
+                let notifyText = '[剧情推进]';
+                const firstPart = parts[0] || '';
+                const match = firstPart.match(/{{ACTION:(.*?)}}/);
+                if(match) notifyText = match[1]; // 如果是动作，显示动作内容
+                else if(firstPart) notifyText = firstPart; // 如果是对话，显示对话
+
+                window.parent.postMessage({
+                    type: 'new_msg_notify',
+                    chatId: currentChar.id,
+                    name: currentChar.name,
+                    avatar: currentChar.avatar,
+                    msg: notifyText
+                }, '*');
+                chatChannel.postMessage({ type: 'new_msg_notify', chatId: currentChar.id, name: currentChar.name, avatar: currentChar.avatar, msg: notifyText });
+                // ---------------------------------------
+                
+                // *** 重要：直接返回，不再执行下面的旧逻辑 ***
+                return; 
+            }
+            // =========================
+            // 新增逻辑结束
+            // =========================
+
+            // --- [开始插入/修改] 通知逻辑 ---
+            // 1. 如果是特殊指令处理完后 text 为空，就不弹窗了，否则继续
+            
+            // --- 修复双语模式：先把<hr>前后的换行粘起来，防止被切成3个气泡 ---
+            text = text.replace(/[\r\n]+\s*<hr>\s*[\r\n]+/g, '<hr>');
+            text = text.replace(/[\r\n]+\s*<hr>/g, '<hr>');
+            text = text.replace(/<hr>\s*[\r\n]+/g, '<hr>');
+            
+            // 2. 分割回复内容
+            let parts = text.split(/\|\|\||\n/).map(p => p.trim()).filter(p => p);
+
+            const vIdx = parts.findIndex(p => p.includes('{{SEND_VOICE:'));
+            if (vIdx !== -1 && parts.length > 1) {
+                const vPart = parts.splice(vIdx, 1)[0]; // 取出语音
+                const r = Math.random();
+                // 30%概率放开头，30%概率放中间，40%概率放最后
+                const newPos = r < 0.3 ? 0 : (r < 0.6 ? Math.floor(parts.length / 2) : parts.length);
+                parts.splice(newPos, 0, vPart);
+            }
+
+            // 3. 发送第一条消息给主页 (index.html) 用于弹窗
+            if (parts.length > 0 && currentChar) {
+                // 获取第一条内容
+                let firstMsg = parts[0];
+                
+                // 简单的清洗：如果第一条是特殊指令（如图片/语音），转义一下文案
+                if (firstMsg.includes('{{SEND_IMAGE')) firstMsg = '[发送了一张图片]';
+                else if (firstMsg.includes('{{SEND_VOICE')) firstMsg = '[发送了一条语音]';
+                else if (firstMsg.includes('{{SEND_TRANSFER')) firstMsg = '[发起转账]';
+                else if (firstMsg.includes('{{SEND_EMOTICON')) firstMsg = '[发送了一个表情]';
+                // 清洗引用和动作标签
+                firstMsg = firstMsg.replace(/{{.*?}}/g, '').trim(); 
+                
+                if (firstMsg) {
+                    window.parent.postMessage({
+                        type: 'new_msg_notify',
+                        chatId: currentChar.id,
+                        name: currentChar.name,      // 角色名/备注名
+                        avatar: currentChar.avatar,  // 头像
+                        msg: firstMsg                // 第一条内容
+                    }, '*');
+                    chatChannel.postMessage({ type: 'new_msg_notify', chatId: currentChar.id, name: currentChar.name, avatar: currentChar.avatar, msg: firstMsg });
+                }
+            }
+            
+            if (parts.length > 0) {
+                if(Date.now() - (currentChar.history[currentChar.history.length-1].timestamp||0) > TIME_INTERVAL) appendTime(Date.now());
+                
+                let i = 0;
+               function playNext() {
+                    if (i < parts.length && activeChatId === currentChar.id) {
+                        let partText = parts[i];
+                        const vMatch = partText.match(/{{SEND_VOICE:(.*?)}}/);
+                        if (vMatch) {
+                            let content = vMatch[1];
+                            let duration = Math.max(2, Math.floor(content.length / 3)) + '"';
+                            appendSpecialMsg('voice', { text: content, duration: duration }, false);
+                            playSoundInstant();
+                            i++; // 索引+1，准备下一条
+                            // 语音发完稍微多等一会(1.2秒)再发下一条，节奏感更好
+                            if (i < parts.length) setTimeout(playNext, 1200); 
+                            else generateThoughts(config, context, text);
+                            return; // 关键：阻断后面的代码，防止把语音指令当成普通文字发出来
+                        }
+                        let quoteData = null;
+                        const quoteMatch = partText.match(/{{QUOTE:(.*?)}}/);
+                        if (quoteMatch) {
+                            quoteData = { sender: '我', text: quoteMatch[1] }; 
+                            partText = partText.replace(quoteMatch[0], '').trim();
+                        }
+                        
+                        // --- 修复版：只保留一次 appendBubble ---
+                        if (partText) {
+                            appendBubble(partText, false, currentChar.history.length, true, quoteData, 'text');
+                            if (!isWindowVisible) {
+                                currentChar.unread = (currentChar.unread || 0) + 1;
+                                saveData(); // 立刻保存
+                                // 通知 QQ 列表刷新红点
+                                window.parent.postMessage({ type: 'refresh_qq_list_request' }, '*');
+                            }
+                            playSoundInstant(); // 播放声音
+                        }
+                        // -------------------------------------
+
+                        i++;
+                        let delay = 800 + (partText.length * 50) + Math.random() * 500;
+                        if (i < parts.length) setTimeout(playNext, delay);
+                        else generateThoughts(config, context, text); 
+                    }
+                }
+                playNext();
+            } else {
+                generateThoughts(config, context, "(动作/功能执行)");
+            }
+        }
+
+        /* --- 修改位置 2：心声与悄悄话生成逻辑 (100%触发心声，80%触发悄悄话) --- */
+async function generateThoughts(config, context, lastReply) {
+    // 1. 独立概率判断：是否触发悄悄话 (80% 概率)
+    // 注意：这里只决定“要不要让AI写悄悄话”，不影响“心声”的生成
+    const triggerWhisper = Math.random() < 0.8; 
+
+    console.log(`[生成系统] 心声: 100% | 悄悄话触发: ${triggerWhisper}`);
+
+    let cleanUrl = config.url.trim().replace(/\/+$/, '');
+    let fetchUrl = '';
+    if (cleanUrl.endsWith('/v1')) { fetchUrl = cleanUrl + '/chat/completions'; }
+    else if (cleanUrl.endsWith('/chat/completions')) { fetchUrl = cleanUrl; }
+    else { fetchUrl = cleanUrl + '/v1/chat/completions'; }
+    
+    // 2. 构建 Prompt：必须包含心声，选择性包含悄悄话
+    // 我们将所有指令合并在一个 Prompt 里，让 AI 一次性返回 JSON，避免多次请求导致回复敷衍或变慢
+    let prompt = `任务：请根据刚才的对话内容，分析角色当前的内心状态。
+    
+    【必须生成的内容 (100%)】
+    请更新角色的以下三项状态：
+    1. status: 当前的状态，以及看到消息的反应，严格遵循角色设定，不可OOC。
+    2. outfit: 今天的穿搭描述，不得简述，严格按照角色设定以及当前状态搭配穿搭。
+    3. mind: 此刻内心没说出口的真实想法 (第一人称)，必须完全符合角色设定和当前聊天内容，严禁OOC，50字左右。
+    `;
+
+    if (triggerWhisper) {
+        prompt += `
+    【额外生成的内容】
+    你现在的表达欲很强，请额外写一张【悄悄话便签】给用户。
+    规则：
+    1. 必须用“我”自称，称呼用户为“你”。
+    2. 内容是想对用户说但没发在聊天框里的私房话，或者一种情绪的补充。
+    3. 风格要生动可爱，1-3句话。
+        `;
+    }
+
+    prompt += `
+    【最终格式要求】
+    请务必只返回一段合法的 JSON 代码，不要包含 markdown 标记或额外文字。格式如下：
+    {
+        "status": "...",
+        "outfit": "...",
+        "mind": "..."${triggerWhisper ? ',\n        "whisper_content": "这里填悄悄话内容"' : ''}
+    }`;
+
+    try {
+        const res = await fetch(fetchUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+            body: JSON.stringify({ 
+                model: config.model || 'gpt-3.5-turbo', 
+                // 只取最近的上下文，减少 token 消耗，保证速度
+                messages: [
+                    ...context.slice(-6), 
+                    {role: 'assistant', content: lastReply}, 
+                    {role: 'system', content: prompt}
+                ], 
+                temperature: config.temperature || 0.8
+            })
+        });
+
+        if(res.ok) {
+            const data = await res.json();
+            let content = data.choices[0].message.content;
+            
+            // 清理可能存在的 markdown 代码块标记 (```json ... ```)
+            content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+
+            const jsonStart = content.indexOf('{');
+            const jsonEnd = content.lastIndexOf('}');
+            
+            if(jsonStart !== -1 && jsonEnd !== -1) {
+                const result = JSON.parse(content.substring(jsonStart, jsonEnd+1));
+                
+                // --- 逻辑 A: 100% 处理心声 (修复之前心声坏了的问题) ---
+                if (result.status || result.mind) {
+                    const newThought = {
+                        status: result.status || "在线",
+                        outfit: result.outfit || "日常",
+                        mind: result.mind || "...",
+                        timestamp: Date.now()
+                    };
+                    
+                    if (!currentChar.thoughtsHistory) currentChar.thoughtsHistory = [];
+                    currentChar.thoughtsHistory.push(newThought);
+                    // 限制历史记录数量，防爆
+                    if (currentChar.thoughtsHistory.length > 50) currentChar.thoughtsHistory.shift();
+                    
+                    console.log("心声已更新:", newThought);
+                }
+
+                // --- 逻辑 B: 如果生成了悄悄话，则保存 (80% 触发) ---
+                if (triggerWhisper && result.whisper_content) {
+                    const newNote = {
+                        id: Date.now(),
+                        text: result.whisper_content,
+                        // 随机样式
+                        bgStyle: ['note-style-hearts', 'note-style-dots', 'note-style-grid', 'note-style-cloud'][Math.floor(Math.random() * 4)],
+                        rotateClass: ['rotate-left', 'rotate-right', 'rotate-big-left', 'rotate-big-right'][Math.floor(Math.random() * 4)],
+                        textStyle: ['normal', 'text-bold-pink', 'text-small', 'text-messy'][Math.floor(Math.random() * 4)],
+                        specialEffect: Math.random() < 0.1 ? 'text-bounce' : (Math.random() < 0.1 ? 'text-strike' : '')
+                    };
+
+                    if(!currentChar.whisperNotes) currentChar.whisperNotes = [];
+                    currentChar.whisperNotes.unshift(newNote);
+                    if(currentChar.whisperNotes.length > 20) currentChar.whisperNotes.pop();
+                    
+                    console.log("悄悄话已生成:", newNote);
+
+                    // 如果当前正好开着悄悄话弹窗，立即刷新界面
+                    if(document.getElementById('whisperModal').style.display === 'flex') {
+                        renderWhisperNotes();
+                    }
+                }
+                
+                // 统一保存一次数据
+                saveData();
+            }
+        }
+    } catch(e) {
+        console.error("生成心声/悄悄话失败", e);
+    }
+}
+
+        // 新增：自动总结 (强化版：支持自定义指令)
+        async function checkAutoSummary(config) {
+            if (!currentChar.autoSummary) return;
+            const threshold = currentChar.autoSummaryThreshold || 100;
+            const len = currentChar.history.length;
+            
+            // 只有当消息数量正好是阈值的倍数时触发
+            if (len > 0 && len % threshold === 0) {
+                let cleanUrl = config.url.trim().replace(/\/+$/, '');
+                let fetchUrl = '';
+                if (cleanUrl.endsWith('/v1')) { fetchUrl = cleanUrl + '/chat/completions'; }
+                else if (cleanUrl.endsWith('/chat/completions')) { fetchUrl = cleanUrl; }
+                else { fetchUrl = cleanUrl + '/v1/chat/completions'; }
+                
+                // 取最近 threshold 条进行总结
+                const recent = currentChar.history.slice(-threshold).map(m => `${m.role}:${m.content}`).join('\n');
+                
+                // --- 核心修改：判断是否有自定义指令 ---
+                const defaultPrompt = "你是一个专业的记忆助手。请根据以下对话，总结出关键信息。总结必须包含：1.时间(大概发生时候) 2.人物(谁和谁) 3.事件(发生了什么) 4.约定或重要细节。请用简洁的语言总结，字数控制在150字以内，不要遗漏重要情节。";
+                const systemPrompt = currentChar.summaryPrompt && currentChar.summaryPrompt.trim() !== "" 
+                                     ? currentChar.summaryPrompt 
+                                     : defaultPrompt;
+
+                try {
+                    const res = await fetch(fetchUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+                        body: JSON.stringify({
+                            model: config.model,
+                            messages: [
+                                {role: "system", content: systemPrompt}, // 使用动态Prompt
+                                {role: "user", content: recent}
+                            ],
+                            temperature: 0.5
+                        })
+                    });
+                    if(res.ok) {
+                        const data = await res.json();
+                        const summary = `[自动总结 ${new Date().toLocaleString()}]: ` + data.choices[0].message.content;
+                        if(!currentChar.longTermMemories) currentChar.longTermMemories = [];
+                        currentChar.longTermMemories.push(summary);
+                        saveData();
+                    }
+                } catch(e) {
+                    console.error("自动总结失败", e);
+                }
+            }
+        }
+
+        // 1. 切换语音文字显示
+function toggleVoiceText(el) {
+    const textDiv = el.nextElementSibling;
+    if (textDiv) textDiv.classList.toggle('show');
+}
+
+// 2. 查看图片描述
+function showImageDesc(desc) {
+    document.getElementById('imageViewText').innerText = desc;
+    document.getElementById('imageViewModal').style.display = 'flex';
+}
+
+// 3. 处理转账卡片点击 (修改版)
+function handleTransferClick(index, isMe) {
+    const msg = currentChar.history[index];
+    if (!msg || msg.msgType !== 'transfer') return;
+    
+    let data = {};
+    try { data = JSON.parse(msg.content); } catch(e) { return; }
+
+    // 只有当：是对方发给我的(!isMe)，且状态是 pending (未处理) 时
+    if (!isMe && data.status === 'pending') {
+        // 记录当前点击的是哪条消息
+        tempTransferIndex = index;
+        // 【关键点】这里必须显示弹窗，给用户选择的权力
+        document.getElementById('userReceiveTransferModal').style.display = 'flex';
+    }
+}
+
+// 新增：用户在弹窗点击 收取 或 拒收 后的逻辑
+function confirmUserTransferAction(action) {
+    // 关闭弹窗
+    document.getElementById('userReceiveTransferModal').style.display = 'none';
+    
+    // 校验数据
+    if (tempTransferIndex === -1 || !currentChar) return;
+    const msg = currentChar.history[tempTransferIndex];
+    if (!msg) return;
+
+    // --- 1. 修改对方那条消息的状态（变为已收/已退）---
+    let data = JSON.parse(msg.content);
+    data.status = action; // 'accepted' 或 'returned'
+    msg.content = JSON.stringify(data);
+    
+    // --- 2. 钱包处理（只在收款时加钱）---
+    if (action === 'accepted') {
+        updateWalletBalance(parseFloat(data.amount), `收到 ${currentChar.name} 转账`);
+    } 
+    // 如果是 refused/returned，不需要扣钱也不需要加钱
+
+    // --- 3. 生成我的回复气泡（关键修改）---
+    let noteText = action === 'accepted' ? '已收款' : '已退还';
+    
+    // 构造回复气泡的数据
+    let replyContent = JSON.stringify({
+        amount: data.amount, 
+        note: noteText, 
+        status: action 
+    });
+
+    // 插入一条“我”发送的转账类型消息
+    currentChar.history.push({
+        role: 'user',         // 角色是我
+        msgType: 'transfer',  // 类型是转账卡片
+        content: replyContent, 
+        timestamp: Date.now() 
+    });
+    
+    // --- 4. 保存并刷新 ---
+    tempTransferIndex = -1;
+    saveData();
+    renderChat(activeChatId);
+}
+
+// 4. 角色处理用户转账的逻辑 (被 AI 触发)
+function aiProcessTransfer(action) {
+    if (!currentChar) return;
+    // 倒序查找最后一条用户发给角色的 pending 转账
+    for (let i = currentChar.history.length - 1; i >= 0; i--) {
+        const msg = currentChar.history[i];
+        // 必须是：用户发的(role=user)，类型是转账，状态是pending
+        if (msg.role === 'user' && msg.msgType === 'transfer') {
+            let data = JSON.parse(msg.content);
+            if (data.status === 'pending') {
+                data.status = action; // 'accepted' 或 'returned'
+                msg.content = JSON.stringify(data);
+
+                if (action === 'returned') {
+                    updateWalletBalance(parseFloat(data.amount), `${currentChar.name} 退回转账`);
+                }
+                
+                // 角色发送对应的反馈卡片
+                let noteText = action === 'accepted' ? '已收款' : '已退还';
+                let replyContent = JSON.stringify({
+                    amount: data.amount, 
+                    note: noteText, 
+                    status: action 
+                });
+                
+                currentChar.history.push({
+                    role: 'assistant', 
+                    msgType: 'transfer', 
+                    content: replyContent, 
+                    timestamp: Date.now()
+                });
+                
+                saveData();
+                renderChat(activeChatId);
+                return; // 处理完一条就结束
+            }
+        }
+    }
+}
+
+// 5. 弹窗按钮的处理函数 (对应HTML里的 onclick="handleTransferAction")
+function handleTransferAction(action) {
+    document.getElementById('charTransferActionModal').style.display = 'none';
+    // 这个函数其实是留给用户手动操作的，但既然我们交给AI全自动判断，
+    // 这里暂时留空或者仅作测试用。
+    // 在本逻辑中，角色收不收钱完全由 triggerAiReply 中的 prompt 决定，
+    // 这里的弹窗其实在你的需求里被 AI 自动化替代了，但保留着防止报错。
+}
+
+/* --- 悄悄话 (Whisper) 功能函数 --- */
+
+let noteToDeleteId = null; // 暂存要删除的便签ID
+
+// 1. 打开弹窗
+function openWhisperModal() {
+    if(!currentChar) return;
+    
+    // 生成背景星星 (每次打开随机生成位置)
+    const starsContainer = document.getElementById('starsBg');
+    starsContainer.innerHTML = '';
+    for(let i=0; i<15; i++) { // 生成15颗星星
+        const star = document.createElement('div');
+        star.className = 'star-deco';
+        // 随机位置、大小、延迟
+        star.style.left = Math.random() * 100 + '%';
+        star.style.top = Math.random() * 100 + '%';
+        const size = 15 + Math.random() * 35; // 让星星大一点，范围 15px - 50px
+        star.style.width = size + 'px';
+        star.style.height = size + 'px';
+        star.style.animationDelay = Math.random() * 2 + 's';
+        starsContainer.appendChild(star);
+    }
+
+    renderWhisperNotes();
+    document.getElementById('whisperModal').style.display = 'flex';
+}
+
+// 2. 渲染便签墙
+function renderWhisperNotes() {
+    const container = document.getElementById('whisperNoteWall');
+    container.innerHTML = '';
+
+    const notes = currentChar.whisperNotes || [];
+
+    if (notes.length === 0) {
+        container.innerHTML = '<div style="grid-column: span 2; text-align:center; color:#999; margin-top:50px;">暂时还没有悄悄话哦~<br>多聊聊天就会有了</div>';
+        return;
+    }
+
+    notes.forEach(note => {
+        const div = document.createElement('div');
+        // 组合 class: 基础 + 背景样式 + 旋转方向
+        div.className = `sticky-note ${note.bgStyle} ${note.rotateClass}`;
+        
+        // 构建内容 HTML
+        let contentHtml = `<span class="${note.textStyle} ${note.specialEffect || ''}">${note.text}</span>`;
+        
+        // 右上角删除按钮
+        const deleteBtn = `<div class="note-delete-btn" onclick="askDeleteNote(${note.id})">×</div>`;
+        
+        div.innerHTML = deleteBtn + contentHtml;
+        container.appendChild(div);
+    });
+}
+
+// 3. 询问删除
+function askDeleteNote(id) {
+    noteToDeleteId = id;
+    document.getElementById('deleteNoteConfirmModal').style.display = 'flex';
+}
+
+// 4. 确认删除
+function confirmDeleteNote() {
+    if(noteToDeleteId && currentChar) {
+        // 过滤掉该ID的便签
+        currentChar.whisperNotes = currentChar.whisperNotes.filter(n => n.id !== noteToDeleteId);
+        saveData();
+        renderWhisperNotes(); // 刷新界面
+    }
+    document.getElementById('deleteNoteConfirmModal').style.display = 'none';
+    noteToDeleteId = null;
+}
+
+// --- iOS 强力音频控制器 (修复不响/延迟) ---
+        const globalAudioPlayer = new Audio();
+        // 关键：开启预加载
+        globalAudioPlayer.preload = "auto"; 
+        let audioContextUnlocked = false;
+
+        async function initAudioSystem() {
+            try {
+                const themeStr = await dbGet('buzzy_active_theme');
+                if (themeStr) {
+                    const theme = JSON.parse(themeStr);
+                    if (theme.msgSound && theme.msgSound.startsWith('http')) {
+                        globalAudioPlayer.src = theme.msgSound;
+                        globalAudioPlayer.volume = 0.5;
+                        globalAudioPlayer.load(); // 强制浏览器开始缓冲
+                    }
+                }
+            } catch (e) { console.log('Audio init failed', e); }
+        }
+
+        // --- 核心：用户一旦触摸屏幕，就立刻激活音频 ---
+        function forceUnlockAudio() {
+            if (audioContextUnlocked || !globalAudioPlayer.src) return;
+            
+            // 尝试播放并立刻暂停，骗过 iOS 的自动播放拦截
+            const p = globalAudioPlayer.play();
+            if (p !== undefined) {
+                p.then(() => {
+                    globalAudioPlayer.pause();
+                    globalAudioPlayer.currentTime = 0;
+                    audioContextUnlocked = true; // 标记为已解锁
+                    console.log("Audio System Unlocked!");
+                }).catch(() => {
+                    // 如果这次失败了，下次点击继续尝试
+                });
+            }
+        }
+
+        function playSoundInstant() {
+            if (!globalAudioPlayer.src) return;
+            
+            // 每次播放前重置时间，确保是从头播放
+            globalAudioPlayer.currentTime = 0;
+            
+            const p = globalAudioPlayer.play();
+            if (p !== undefined) {
+                p.catch(e => {
+                    console.log("播放被拦截，尝试重新激活");
+                    // 如果播放失败，说明解锁掉了，标记为未解锁，等待下次点击
+                    audioContextUnlocked = false;
+                });
+            }
+        }
+
+        // 监听所有可能的交互，只要用户动了手指，就尝试激活音频
+        document.body.addEventListener('touchstart', forceUnlockAudio, { passive: true });
+        document.body.addEventListener('click', forceUnlockAudio, { passive: true });
+        // 甚至在输入框打字时也尝试激活
+        msgInput.addEventListener('focus', forceUnlockAudio);
+         msgInput.addEventListener('keypress', (e) => { 
+            if(e.key === 'Enter') sendUserMsg(); 
+        });
+    </script>
+
+</body>
+</html>

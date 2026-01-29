@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Menu Frame</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body { margin: 0; padding: 0; background: transparent; height: 100vh; width: 100vw; overflow: hidden; }
+        
+        .context-menu-mask {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: none;
+        }
+        .context-menu-mask.active { display: block; }
+        
+        .context-menu {
+            position: absolute; background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 12px; padding: 5px;
+            display: flex; flex-wrap: wrap; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            min-width: 200px; max-width: 280px;
+            animation: fadeInMenu 0.15s ease-out;
+            transform-origin: top left;
+        }
+        @keyframes fadeInMenu { from{opacity:0;transform:scale(0.95);} to{opacity:1;transform:scale(1);} }
+        .c-menu-item {
+            padding: 10px 15px; font-size: 14px; color: #333;
+            cursor: pointer; text-align: center; flex: 1; white-space: nowrap;
+        }
+        .c-menu-item:active { background: #f0f0f0; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="context-menu-mask" id="mask" onclick="closeMenu()">
+        <div class="context-menu" id="menu" style="display:none;" onclick="event.stopPropagation()"></div>
+    </div>
+
+    <script>
+        window.addEventListener('message', function(event) {
+            const data = event.data;
+            if(data.action === 'open') {
+                showMenu(data.x, data.y, data.screenW, data.screenH);
+            }
+        });
+
+        function showMenu(x, y, screenW, screenH) {
+            const menu = document.getElementById('menu');
+            const mask = document.getElementById('mask');
+            
+            // 构建菜单内容
+            const btnCopy = `<div class="c-menu-item" onclick="sendAction('copy')">复制</div>`;
+            const btnEdit = `<div class="c-menu-item" onclick="sendAction('edit')">编辑</div>`;
+            const btnQuote = `<div class="c-menu-item" onclick="sendAction('quote')">引用</div>`;
+            const btnMulti = `<div class="c-menu-item" onclick="sendAction('multi')">多选</div>`;
+            const btnCancel = `<div class="c-menu-item" onclick="closeMenu()" style="color:#FF3B30">取消</div>`;
+            const btnRecall = `<div class="c-menu-item" onclick="sendAction('recall')">撤回</div>`;
+            
+            menu.innerHTML = btnEdit + btnCopy + btnRecall + btnQuote + btnMulti + btnCancel;
+
+            mask.classList.add('active');
+            menu.style.display = 'flex';
+
+            // 计算位置，防止溢出屏幕
+            let menuX = x;
+            let menuY = y;
+            const approxMenuW = 230;
+            const approxMenuH = 200;
+
+            if (menuX + approxMenuW > screenW) menuX = screenW - approxMenuW - 10;
+            if (menuY + approxMenuH > screenH) menuY = screenH - approxMenuH - 10;
+            
+            menu.style.left = menuX + 'px';
+            menu.style.top = menuY + 'px';
+        }
+
+        function closeMenu() {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('mask').classList.remove('active');
+            window.parent.postMessage({action: 'closeMenu'}, '*');
+        }
+
+        function sendAction(cmd) {
+            window.parent.postMessage({action: 'menuAction', cmd: cmd}, '*');
+            closeMenu();
+        }
+    </script>
+</body>
+</html>

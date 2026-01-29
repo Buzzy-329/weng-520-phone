@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Connect Heart - Settings</title>
+    <style>
+        /* --- 基础设定 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background: linear-gradient(180deg, #fff0f5 0%, #ffe4e1 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #5d5d5d;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* --- 顶部导航 --- */
+        .nav-bar {
+            padding: 50px 24px 20px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 10;
+        }
+        .back-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; box-shadow: 0 4px 12px rgba(255, 182, 193, 0.2);
+            font-size: 18px; color: #888; 
+            transition: transform 0.2s;
+        }
+        .back-btn:active { transform: scale(0.9); }
+        .page-title {
+            font-size: 18px; font-weight: 600; letter-spacing: 0.5px; color: #7a6a6a;
+        }
+        .right-action { width: 40px; }
+
+        /* --- 主内容区 --- */
+        .content-area {
+            flex: 1; padding: 0 24px;
+            display: flex; flex-direction: column; gap: 20px;
+            overflow-y: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            padding-bottom: 40px; /* 底部留白 */
+        }
+        .content-area::-webkit-scrollbar { display: none; }
+
+        /* --- 预设 (Presets) --- */
+        .preset-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 5px; margin-bottom: 5px;
+        }
+        .section-label { font-size: 13px; font-weight: 600; color: #aa9999; }
+        .delete-btn {
+            font-size: 12px; color: #ff6b6b; cursor: pointer;
+            padding: 4px 10px; background: rgba(255, 107, 107, 0.1);
+            border-radius: 10px; display: none; font-weight: 600;
+        }
+        
+        .preset-scroll {
+            display: flex; gap: 10px; overflow-x: auto; padding: 5px 2px 15px 2px;
+            scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .preset-scroll::-webkit-scrollbar { display: none; }
+
+        .preset-chip {
+            flex-shrink: 0; padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 16px;
+            font-size: 13px; color: #777;
+            transition: all 0.3s; cursor: pointer;
+        }
+        .preset-chip.active {
+            background: #ffb7b2; color: white;
+            box-shadow: 0 4px 12px rgba(255, 183, 178, 0.4);
+            border-color: #ffb7b2; transform: scale(1.05);
+        }
+        .add-preset-btn {
+            width: 34px; height: 34px; border-radius: 50%;
+            background: #fff; display: flex; justify-content: center; align-items: center;
+            color: #ffb7b2; font-size: 18px; flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); cursor: pointer;
+        }
+
+        /* --- 通用卡片样式 --- */
+        .form-card {
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 24px; padding: 5px;
+            box-shadow: 0 10px 30px rgba(230, 200, 200, 0.3);
+            display: flex; flex-direction: column;
+        }
+        
+        /* 输入框组 */
+        .input-group {
+            position: relative; padding: 10px 20px;
+            display: flex; flex-direction: column; justify-content: center;
+        }
+        .input-group:not(:last-child)::after {
+            content: ''; position: absolute; bottom: 0; left: 20px; right: 20px;
+            height: 1px; background: rgba(0,0,0,0.05);
+        }
+
+        /* 温度滑块样式 */
+        input[type=range] {
+            width: 100%; -webkit-appearance: none; background: transparent; margin: 12px 0 5px 0;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%;
+            background: #ffb7b2; cursor: pointer; margin-top: -8px;
+            box-shadow: 0 2px 6px rgba(255,183,178,0.6); border: 2px solid #fff;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; background: rgba(0,0,0,0.06); border-radius: 2px;
+        }
+        .range-value { float: right; color: #aaa; font-weight: normal; font-family: monospace;}
+
+        .input-label {
+            font-size: 11px; color: #ffb7b2; font-weight: 700; 
+            margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .input-field {
+            width: 100%; border: none; background: transparent;
+            font-size: 16px; color: #444; padding: 4px 0;
+            font-family: monospace;
+        }
+        
+        select.input-field {
+            appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ffb7b2%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0px center;
+            background-size: 12px;
+            padding-right: 20px;
+        }
+
+        /* --- 备份与恢复卡片 (新加样式) --- */
+        .backup-card {
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 24px; padding: 15px 20px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .backup-desc { font-size: 12px; color: #999; line-height: 1.4; margin-bottom: 5px; }
+
+        /* --- 底部心跳 --- */
+        .heart-area {
+            margin-top: auto; 
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
+        }
+        .heart-icon { font-size: 48px; color: #e0e0e0; transition: all 0.3s ease; }
+        .heart-icon.beating { color: #ff6b6b; animation: heartbeat 1.2s infinite; }
+        .heart-icon.dead { color: #999; transform: rotate(90deg); }
+        
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            14% { transform: scale(1.2); }
+            28% { transform: scale(1); }
+            42% { transform: scale(1.2); }
+            70% { transform: scale(1); }
+        }
+
+        .status-text { font-size: 12px; color: #aaa; text-align: center; min-height: 1.5em; }
+        .action-row { display: flex; width: 100%; gap: 12px; }
+        .btn {
+            flex: 1; padding: 16px; border-radius: 18px; border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-test { background: #fff; color: #ffb7b2; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .btn-save { background: linear-gradient(135deg, #ffb7b2 0%, #ffdac1 100%); color: #fff; box-shadow: 0 6px 15px rgba(255, 183, 178, 0.4); }
+        
+        /* 新增：备份按钮样式 */
+        .btn-export { background: #f0f4ff; color: #7a8ba6; }
+        .btn-import { background: #fff9e6; color: #bfa15f; }
+
+        /* --- 弹窗 (Modal) --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); backdrop-filter: blur(5px);
+            z-index: 100; display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        
+        .modal-card {
+            background: rgba(255,255,255,0.95); width: 80%; max-width: 300px;
+            padding: 25px; border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            text-align: center; transform: scale(0.9); transition: transform 0.3s;
+        }
+        .modal-overlay.show .modal-card { transform: scale(1); }
+        
+        .modal-title { font-size: 16px; font-weight: 600; color: #555; margin-bottom: 10px; }
+        .modal-desc { font-size: 13px; color: #888; margin-bottom: 20px; line-height: 1.4; }
+        .modal-input {
+            width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #eee;
+            background: #f9f9f9; font-size: 14px; margin-bottom: 20px; text-align: center;
+        }
+        .modal-actions { display: flex; gap: 10px; }
+        .modal-btn {
+            flex: 1; padding: 12px; border-radius: 12px; border: none; font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        .modal-cancel { background: #f0f0f0; color: #888; }
+        .modal-confirm { background: #ffb7b2; color: #fff; }
+        .modal-delete { background: #ffefef; color: #ff6b6b; }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px);
+            background: rgba(255,255,255,0.95); padding: 12px 25px; border-radius: 30px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1); font-size: 13px; color: #333;
+            transition: transform 0.3s; z-index: 200;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+</head>
+<body>
+
+    <!-- 导航 -->
+    <div class="nav-bar">
+        <div class="back-btn" onclick="closeSettings()">←</div>
+        <div class="page-title">设置与管理</div>
+        <div class="right-action"></div>
+    </div>
+
+    <!-- 内容 -->
+    <div class="content-area">
+        
+        <!-- 预设列表 -->
+        <div class="preset-section">
+            <div class="preset-header">
+                <span class="section-label">AI 源配置</span>
+                <div class="delete-btn" id="deleteBtn" onclick="openDeleteModal()">删除此源</div>
+            </div>
+            <div class="preset-scroll" id="presetContainer">
+                <div class="add-preset-btn" onclick="openAddModal()">+</div>
+            </div>
+        </div>
+
+        <!-- API 表单 -->
+        <div class="form-card">
+            <div class="input-group">
+                <span class="input-label">反代地址 (Base URL)</span>
+                <input type="text" id="urlInput" class="input-field" placeholder="https://..." spellcheck="false">
+            </div>
+            
+            <div class="input-group">
+                <span class="input-label">密钥 (API Key)</span>
+                <input type="password" id="keyInput" class="input-field" placeholder="sk-..." spellcheck="false">
+            </div>
+
+            <div class="input-group">
+                <span class="input-label">选择模型 (Model)</span>
+                <select id="modelInput" class="input-field">
+                    <option value="" disabled selected>请先点击测试获取列表...</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <span class="input-label">
+                    思维活跃度 (Temperature) <span id="tempDisplay" class="range-value">0.8</span>
+                </span>
+                <!-- 范围0.0到2.0，步进0.1，默认0.8 -->
+                <input type="range" id="tempInput" min="0" max="2" step="0.1" value="0.8" 
+                       oninput="document.getElementById('tempDisplay').innerText = this.value">
+            </div>
+        </div>
+
+        <!-- 数据管理 (新功能) -->
+        <div class="preset-header" style="margin-top:10px;">
+            <span class="section-label">数据迁移</span>
+        </div>
+        <div class="backup-card">
+            <div class="backup-desc">可以将当前小手机的所有数据（聊天、壁纸、字体等）导出备份，或导入之前的备份文件。</div>
+            <div class="action-row">
+                <button class="btn btn-export" onclick="exportData()">⬇ 导出数据</button>
+                <button class="btn btn-import" onclick="triggerImport()">⬆ 导入数据</button>
+            </div>
+            <!-- 隐藏的文件输入框 -->
+            <input type="file" id="importFile" style="display:none" accept=".json" onchange="importData(this)">
+        </div>
+        
+        <!-- 底部 -->
+        <div class="heart-area">
+            <div class="heart-icon" id="heartIcon">♥</div>
+            <div class="status-text" id="statusText">请配置好后点击测试</div>
+            
+            <div class="action-row">
+                <button class="btn btn-test" onclick="testConnection()">API 测试</button>
+                <button class="btn btn-save" onclick="saveCurrentPreset()">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：添加 -->
+    <div class="modal-overlay" id="addModal">
+        <div class="modal-card">
+            <div class="modal-title">新连接命名</div>
+            <input type="text" class="modal-input" id="newPresetName" placeholder="例如: DeepSeek" autocomplete="off">
+            <div class="modal-actions">
+                <button class="modal-btn modal-cancel" onclick="closeAddModal()">取消</button>
+                <button class="modal-btn modal-confirm" onclick="confirmAddPreset()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：删除 -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal-card">
+            <div class="modal-title" style="color:#ff6b6b">确认删除</div>
+            <div class="modal-desc">确定要丢弃这个连接源头吗？<br>删除后无法恢复哦。</div>
+            <div class="modal-actions">
+                <button class="modal-btn modal-cancel" onclick="closeDeleteModal()">取消</button>
+                <button class="modal-btn modal-delete" onclick="confirmDeletePreset()">狠心删除</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">已保存</div>
+
+    <script>
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+                dbPromise = idb.openDB('QQ_DB_2026', 1, {
+                    upgrade(db) {
+                        if (!db.objectStoreNames.contains('keyval')) {
+                            db.createObjectStore('keyval');
+                        }
+                    },
+                });
+            }
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+        // --- 核心逻辑 ---
+        function closeSettings() {
+            if (window.parent && window.parent.closeApp) {
+                window.parent.closeApp();
+            } else {
+                history.back();
+            }
+        }
+
+        let presets = [];
+        let currentPresetId = null;
+
+        const presetContainer = document.getElementById('presetContainer');
+        const urlInput = document.getElementById('urlInput');
+        const keyInput = document.getElementById('keyInput');
+        const modelInput = document.getElementById('modelInput'); 
+        const tempInput = document.getElementById('tempInput');
+        const tempDisplay = document.getElementById('tempDisplay');
+        const statusText = document.getElementById('statusText');
+        const heartIcon = document.getElementById('heartIcon');
+        const deleteBtn = document.getElementById('deleteBtn');
+
+        const addModal = document.getElementById('addModal');
+        const deleteModal = document.getElementById('deleteModal');
+        const newPresetNameInput = document.getElementById('newPresetName');
+
+        window.onload = async () => {
+            // 1. 【核心】配置连接到统一的 QQ_DB_V3
+
+            await loadPresets();
+        };
+
+        async function loadPresets() {
+            try {
+                const stored = await dbGet('aiPhone_presets');
+                // 增加判断：必须存在且必须是数组，否则回退到默认
+                if (stored && Array.isArray(stored)) {
+                    presets = stored;
+                } else {
+                    presets = [
+                        { id: Date.now(), name: '默认', url: 'https://api.openai.com', key: '', model: 'gpt-3.5-turbo' }
+                    ];
+                }
+                
+                const lastId = await dbGet('aiPhone_currentId');
+                const exists = presets.find(p => p.id == lastId);
+                currentPresetId = exists ? parseInt(lastId) : presets[0].id;
+
+                renderPresets();
+                fillForm();
+            } catch (err) {
+                console.error("读取配置出错:", err);
+                // 出错时至少保证有一个默认值，防止报错卡死
+                presets = [{ id: Date.now(), name: '默认', url: '', key: '', model: '' }];
+                renderPresets();
+            }
+        }
+
+        function renderPresets() {
+            const oldChips = presetContainer.querySelectorAll('.preset-chip');
+            oldChips.forEach(c => c.remove());
+
+            presets.forEach(p => {
+                const chip = document.createElement('div');
+                chip.className = `preset-chip ${p.id === currentPresetId ? 'active' : ''}`;
+                chip.innerText = p.name;
+                chip.onclick = () => switchPreset(p.id);
+                presetContainer.insertBefore(chip, presetContainer.lastElementChild);
+            });
+
+            deleteBtn.style.display = presets.length > 1 ? 'block' : 'none';
+        }
+
+        function switchPreset(id) {
+            currentPresetId = id;
+            dbSet('aiPhone_currentId', id);
+            resetStatus();
+            renderPresets();
+            fillForm();
+        }
+
+        function fillForm() {
+            const p = presets.find(x => x.id === currentPresetId);
+            if (p) {
+                urlInput.value = p.url || '';
+                keyInput.value = p.key || '';
+                
+                // 读取温度，如果没有存过(旧数据)，默认给0.8
+                const savedTemp = (p.temperature !== undefined) ? p.temperature : 0.8;
+                tempInput.value = savedTemp;
+                tempDisplay.innerText = savedTemp;
+                
+                modelInput.innerHTML = '';
+                if (p.model) {
+                    const opt = document.createElement('option');
+                    opt.value = p.model;
+                    opt.text = p.model;
+                    opt.selected = true;
+                    modelInput.appendChild(opt);
+                } else {
+                    const opt = document.createElement('option');
+                    opt.text = "请先点击测试获取列表...";
+                    opt.disabled = true;
+                    opt.selected = true;
+                    modelInput.appendChild(opt);
+                }
+            }
+        }
+
+        function saveCurrentPreset() {
+            // 使用 == 而不是 ===，防止 ID 是字符串/数字不匹配的问题
+            const pIndex = presets.findIndex(x => x.id == currentPresetId);
+            
+            if (pIndex !== -1) {
+                let cleanUrl = urlInput.value.trim();
+                if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
+                
+                // 更新内存中的数组
+                presets[pIndex].url = cleanUrl;
+                presets[pIndex].key = keyInput.value.trim();
+                presets[pIndex].model = modelInput.value; 
+                presets[pIndex].temperature = parseFloat(tempInput.value);
+                
+                // 准备要保存的“当前生效配置”对象 (供 Chat Window 直接使用)
+                const activeConfig = {
+                    url: presets[pIndex].url,
+                    key: presets[pIndex].key,
+                    model: presets[pIndex].model,
+                    temperature: presets[pIndex].temperature
+                };
+
+                // --- 修改开始：直接保存，不再检查 localforage ---
+                Promise.all([
+                    dbSet('aiPhone_presets', presets),
+                    dbSet('aiPhone_currentId', currentPresetId),
+                    dbSet('qq_ai_config', activeConfig)
+                ]).then(() => {
+                    showToast("设置已保存");
+                    // 通知父窗口更新配置(如果有)
+                    if (window.parent && window.parent.postMessage) {
+                        window.parent.postMessage({ type: 'config_updated', config: activeConfig }, '*');
+                    }
+                }).catch(err => {
+                    alert("保存失败: " + err);
+                });
+                // --- 修改结束 ---
+
+            } else {
+                showToast("未找到当前配置，无法保存");
+            }
+        }
+
+        // --- 弹窗逻辑 ---
+        function openAddModal() {
+            newPresetNameInput.value = "";
+            addModal.classList.add('show');
+            newPresetNameInput.focus();
+        }
+        function closeAddModal() { addModal.classList.remove('show'); }
+        
+        function confirmAddPreset() {
+            const name = newPresetNameInput.value.trim() || "新连接";
+            const newPreset = {
+                id: Date.now(),
+                name: name,
+                url: '',
+                key: '',
+                model: ''
+            };
+            
+            presets.push(newPreset);
+            
+            // 无论保存是否成功，先关闭弹窗，让界面动起来
+            closeAddModal();
+            
+            // --- 修改开始：直接保存，不再检查 localforage ---
+            dbSet('aiPhone_presets', presets).then(() => {
+                 switchPreset(newPreset.id);
+                 showToast("已创建");
+            }).catch(e => {
+                console.error(e);
+                alert("创建失败，无法写入数据库");
+            });
+            // --- 修改结束 ---
+        }
+
+        function openDeleteModal() { deleteModal.classList.add('show'); }
+        function closeDeleteModal() { deleteModal.classList.remove('show'); }
+        
+        function confirmDeletePreset() {
+            if (presets.length <= 1) return;
+            presets = presets.filter(p => p.id !== currentPresetId);
+            currentPresetId = presets[0].id; // 切换回第一个
+            
+            // 获取切换后的新配置
+            const newActive = presets[0];
+            const activeConfig = {
+                url: newActive.url,
+                key: newActive.key,
+                model: newActive.model,
+                temperature: newActive.temperature || 0.8
+            };
+
+            // 保存所有变更
+            Promise.all([
+                dbSet('aiPhone_presets', presets),
+                dbSet('aiPhone_currentId', currentPresetId),
+                dbSet('qq_ai_config', activeConfig) // 【同步更新】
+            ]).then(() => {
+                closeDeleteModal();
+                renderPresets();
+                fillForm();
+                resetStatus();
+                showToast("已删除并切换");
+            });
+        }
+
+        // --- 数据备份与恢复 (新增功能) ---
+        
+        // 1. 导出数据
+        async function exportData() {
+            try {
+                const data = {};
+                
+                // --- 第一步：抓取 QQ_DB_2026 (聊天、角色、API配置) ---
+                const db = await initDB();
+                const keys = await db.getAllKeys('keyval');
+                for (const key of keys) {
+                    const val = await db.get('keyval', key);
+                    data[key] = val;
+                }
+
+                // --- 第二步：抓取 localforage (主题、字体、主页布局) ---
+                // 使用 iterate 遍历所有数据并合并到 data 对象中
+                await localforage.iterate(function(value, key, iterationNumber) {
+                    data[key] = value;
+                });
+
+                // 创建 JSON 文件 blob
+                const jsonStr = JSON.stringify(data, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                // 自动生成带日期的文件名
+                const date = new Date();
+                const fileName = `PhoneBackup_${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate()}.json`;
+
+                // 触发下载
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast("全站数据导出成功");
+            } catch (e) {
+                console.error(e);
+                showToast("导出失败，请检查控制台");
+            }
+        }
+
+        // 2. 触发文件选择
+        function triggerImport() {
+            document.getElementById('importFile').click();
+        }
+
+        // 3. 导入数据
+        function importData(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            if (!confirm("⚠️ 警告：导入数据将覆盖当前小手机的所有聊天记录、设置和美化配置。\n\n确定要继续吗？")) {
+                input.value = ''; 
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    
+                    if (typeof importedData !== 'object' || importedData === null) {
+                        throw new Error("文件格式错误");
+                    }
+
+                    // 1. 清空旧数据 (同时清空两个仓库)
+                    const db = await initDB();
+                    await db.clear('keyval'); // 清空聊天记录库
+                    await localforage.clear(); // 清空主题布局库
+
+                    // 2. 写入新数据 (核心：一份数据，两处备份)
+                    // 这样无论是用 idb 读取的聊天，还是用 localforage 读取的主题，都能找到数据
+                    for (const key in importedData) {
+                        if (Object.prototype.hasOwnProperty.call(importedData, key)) {
+                            const val = importedData[key];
+                            
+                            // 写入 仓库A (QQ_DB_2026)
+                            await dbSet(key, val);
+                            
+                            // 写入 仓库B (localforage)
+                            await localforage.setItem(key, val);
+                        }
+                    }
+
+                    showToast("导入成功！正在重启...");
+                    
+                    // 3. 延迟后刷新
+                    setTimeout(() => {
+                        if (window.parent && window.parent.location && window.parent.location !== window.location) {
+                            window.parent.location.reload();
+                        } else {
+                            location.reload();
+                        }
+                    }, 1500);
+
+                } catch (err) {
+                    console.error(err);
+                    showToast("导入失败: 文件无效");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- API 测试与模型获取 ---
+        async function testConnection() {
+            let url = urlInput.value.trim();
+            const key = keyInput.value.trim();
+
+            if (!url || !key) {
+                statusText.innerText = "请填写完整的地址和密钥";
+                statusText.style.color = "#ff6b6b";
+                return;
+            }
+
+            if (url.endsWith('/')) url = url.slice(0, -1);
+            if (!url.startsWith('http')) url = 'https://' + url;
+
+            statusText.innerText = "正在尝试握手...";
+            statusText.style.color = "#888";
+            heartIcon.className = "heart-icon"; 
+            heartIcon.style.color = "#e0e0e0";
+
+            modelInput.innerHTML = '<option>正在获取模型...</option>';
+            modelInput.disabled = true;
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+                const response = await fetch(`${url}/v1/models`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${key}`,
+                        'Content-Type': 'application/json'
+                    },
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    heartIcon.className = "heart-icon beating";
+                    heartIcon.style.color = "#ff6b6b";
+                    statusText.innerText = "连接成功！已获取模型列表";
+                    statusText.style.color = "#4caf50";
+                    showToast("连接成功");
+
+                    populateModelList(data);
+
+                } else {
+                    throw new Error(`状态码: ${response.status}`);
+                }
+
+            } catch (error) {
+                console.error(error);
+                heartIcon.className = "heart-icon dead";
+                
+                let errMsg = "连接失败";
+                if (error.name === 'AbortError') errMsg = "连接超时";
+                else if (error.message.includes('状态码')) errMsg = "鉴权失败 (" + error.message + ")";
+                else errMsg = "无法连接 (请检查地址/跨域)";
+                
+                statusText.innerText = errMsg;
+                statusText.style.color = "#ff6b6b";
+                
+                modelInput.innerHTML = '<option disabled>获取失败</option>';
+                modelInput.disabled = false;
+            }
+        }
+
+        function populateModelList(data) {
+            modelInput.innerHTML = ''; 
+            modelInput.disabled = false;
+
+            let models = [];
+            
+            if (Array.isArray(data)) {
+                models = data;
+            } else if (data.data && Array.isArray(data.data)) {
+                models = data.data;
+            }
+
+            models.sort((a, b) => a.id.localeCompare(b.id));
+
+            if (models.length === 0) {
+                const opt = document.createElement('option');
+                opt.text = "未找到可用模型";
+                modelInput.appendChild(opt);
+                return;
+            }
+
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.text = m.id;
+                modelInput.appendChild(opt);
+            });
+
+            const currentSavedModel = presets.find(x => x.id === currentPresetId)?.model;
+            if (currentSavedModel) {
+                const exists = models.some(m => m.id === currentSavedModel);
+                if (exists) {
+                    modelInput.value = currentSavedModel;
+                }
+            }
+        }
+
+        function resetStatus() {
+            heartIcon.className = "heart-icon";
+            heartIcon.style.color = "#e0e0e0";
+            statusText.innerText = "准备测试";
+            statusText.style.color = "#aaa";
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+    </script>
+</body>
+</html>

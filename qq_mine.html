@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Profile</title>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background: linear-gradient(180deg, #fff0f5 0%, #f2f2f6 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #333; display: flex; flex-direction: column; overflow: hidden;
+            -webkit-user-select: none; user-select: none;
+        }
+        ::-webkit-scrollbar { display: none; }
+
+        /* 顶部栏 */
+        .header {
+            height: 90px;
+            padding: 45px 20px 10px 20px;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+        }
+        .header-title { font-size: 18px; font-weight: bold; }
+        
+        /* 内容区 */
+        .content-area {
+            flex: 1; padding: 10px 20px 80px 20px;
+            overflow-y: auto; display: flex; flex-direction: column; gap: 15px;
+        }
+
+        /* 粉色卡片: 个人信息 */
+        .profile-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px; padding: 20px;
+            display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 5px 15px rgba(255, 182, 193, 0.2);
+            border: 1px solid #fff;
+        }
+        .my-avatar {
+            width: 70px; height: 70px; border-radius: 18px; 
+            background: #eee; overflow: hidden; display: flex; justify-content: center; align-items: center;
+            flex-shrink: 0;
+        }
+        .my-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .profile-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .my-name { font-size: 20px; font-weight: bold; color: #333; }
+        
+        .my-id-row { font-size: 12px; color: #999; display: flex; align-items: center; gap: 5px; }
+        .editable-text { border-bottom: 1px dashed #ccc; padding-bottom: 1px; cursor: pointer; }
+
+        .status-badge {
+            margin-top: 5px; display: inline-flex; align-items: center; gap: 5px;
+            background: #fff0f5; color: #ff8fa3; padding: 4px 10px; border-radius: 12px;
+            font-size: 12px; font-weight: 600; cursor: pointer; width: fit-content;
+        }
+        .status-dot { width: 6px; height: 6px; background: #34C759; border-radius: 50%; }
+
+        /* 功能菜单项 */
+        .menu-list {
+            background: #fff; border-radius: 16px; overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        }
+        .menu-item {
+            padding: 18px 20px; display: flex; align-items: center; justify-content: space-between;
+            background: #fff; border-bottom: 1px solid #f5f5f5; cursor: pointer;
+        }
+        .menu-item:last-child { border-bottom: none; }
+        .menu-item:active { background: #fafafa; }
+        
+        .menu-left { display: flex; align-items: center; gap: 12px; font-size: 16px; color: #333; }
+        .menu-icon { width: 22px; height: 22px; stroke: #333; stroke-width: 2; fill: none; }
+        .arrow { color: #ccc; font-size: 14px; }
+
+        /* 底部导航栏 */
+        .tab-bar {
+            height: 60px; width: 100%;
+            background: #f9f9f9; border-top: 1px solid #e0e0e0;
+            position: fixed; bottom: 0; left: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: space-around;
+            padding-bottom: 10px;
+        }
+        .tab-item {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 4px; color: #999; width: 33.33%; height: 100%; cursor: pointer;
+        }
+        .tab-item.active { color: #ffb7c5; }
+        .tab-icon { width: 28px; height: 28px; stroke-width: 2; }
+        .tab-text { font-size: 10px; font-weight: 600; }
+
+        /* 弹窗 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); z-index: 500;
+            display: none; justify-content: center; align-items: center;
+            backdrop-filter: blur(4px);
+        }
+        .modal-card {
+            background: rgba(255,255,255,0.98); width: 80%; max-width: 300px;
+            border-radius: 20px; padding: 25px;
+            display: flex; flex-direction: column; gap: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        .modal-title { font-size: 18px; font-weight: 600; text-align: center; }
+        .modal-input {
+            width: 100%; padding: 12px; background: #f2f2f6; border: none;
+            border-radius: 12px; font-size: 16px; text-align: center; color: #333;
+        }
+        .modal-btns { display: flex; gap: 10px; margin-top: 5px; }
+        .m-btn {
+            flex: 1; padding: 12px; border-radius: 12px; border: none; font-size: 15px; font-weight: 600; cursor: pointer;
+        }
+        .btn-cancel { background: #f2f2f6; color: #888; }
+        .btn-confirm { background: #ffb7c5; color: #fff; }
+        
+        .bear-svg { width: 70%; height: 70%; fill: #ddd; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-title">我的</div>
+    </div>
+
+    <div class="content-area">
+        <!-- 个人信息卡片 -->
+        <div class="profile-card">
+            <div class="my-avatar" onclick="document.getElementById('avatarInput').click()">
+                <img id="displayAvatar" src="" style="display:none">
+                <div id="defaultAvatar" style="width:100%;height:100%;display:flex;justify-content:center;align-items:center;">
+                    <svg viewBox="0 0 24 24" class="bear-svg"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </div>
+            </div>
+            <div class="profile-info">
+                <div class="my-name" id="displayName" onclick="openEdit('name')">我</div>
+                <div class="my-id-row">ID: <span class="editable-text" id="displayId" onclick="openEdit('id')">Buzzy520</span></div>
+                <div class="status-badge" onclick="openEdit('status')">
+                    <div class="status-dot"></div>
+                    <span id="displayStatus">在线</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 菜单列表 -->
+        <div class="menu-list">
+            <div class="menu-item" onclick="window.location.href='qq_money.html'">
+                <div class="menu-left">
+                    <svg class="menu-icon" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                    <span>钱包余额</span>
+                </div>
+                <div class="arrow"> > </div>
+            </div>
+            <div class="menu-item" onclick="window.location.href='qq_collect.html'">
+                <div class="menu-left">
+                    <svg class="menu-icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                    <span>我的收藏</span>
+                </div>
+                <div class="arrow"> > </div>
+            </div>
+            <div class="menu-item" onclick="window.location.href='settings.html'">
+                <div class="menu-left">
+                    <svg class="menu-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span>设置与管理</span>
+                </div>
+                <div class="arrow"> > </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部导航栏 -->
+    <div class="tab-bar">
+        <div class="tab-item" onclick="window.location.href='qq.html'">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span class="tab-text">聊天</span>
+        </div>
+        <div class="tab-item" onclick="window.location.href='qq_address.html'">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+            <span class="tab-text">通讯录</span>
+        </div>
+        <div class="tab-item active">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span class="tab-text">我的</span>
+        </div>
+    </div>
+
+    <!-- 弹窗 -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal-card">
+            <div class="modal-title" id="modalTitle">修改</div>
+            <input type="text" class="modal-input" id="editInput">
+            <div class="modal-btns">
+                <button class="m-btn btn-cancel" onclick="closeModal()">取消</button>
+                <button class="m-btn btn-confirm" onclick="saveEdit()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="avatarInput" hidden accept="image/*" onchange="handleAvatarUpload(this)">
+
+    <script>
+        const KEY = 'qq_user_profile';
+        let profile = {
+            name: '我', // <--- 新加这一行
+            id: 'Buzzy520',
+            status: '在线',
+            avatar: ''
+        };
+        let editType = '';
+
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+
+        async function loadProfile() {
+            // 从数据库读取字符串
+            const savedStr = await dbGet(KEY);
+            if(savedStr) {
+                try {
+                    // 解析回对象
+                    profile = JSON.parse(savedStr);
+                } catch(e) { console.error(e); }
+            }
+            render();
+        }
+
+        function render() {
+            document.getElementById('displayName').innerText = profile.name || '我'; // <--- 新加这一行
+            document.getElementById('displayId').innerText = profile.id;
+            document.getElementById('displayStatus').innerText = profile.status;
+            if(profile.avatar) {
+                document.getElementById('displayAvatar').src = profile.avatar;
+                document.getElementById('displayAvatar').style.display = 'block';
+                document.getElementById('defaultAvatar').style.display = 'none';
+            }
+        }
+
+        function openEdit(type) {
+            editType = type;
+            // 下面这几行用来判断弹窗标题和输入框里的旧内容
+            if (type === 'id') {
+                document.getElementById('modalTitle').innerText = '修改 ID';
+                document.getElementById('editInput').value = profile.id;
+            } else if (type === 'status') {
+                document.getElementById('modalTitle').innerText = '修改状态';
+                document.getElementById('editInput').value = profile.status;
+            } else if (type === 'name') { // <--- 新加的判断
+                document.getElementById('modalTitle').innerText = '修改昵称';
+                document.getElementById('editInput').value = profile.name;
+            }
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+
+        async function saveEdit() {
+            const val = document.getElementById('editInput').value.trim();
+            if(val) {
+                if(editType === 'id') profile.id = val;
+                else if(editType === 'status') profile.status = val;
+                else if(editType === 'name') profile.name = val; // <--- 新加的保存逻辑
+                
+                await dbSet(KEY, JSON.stringify(profile));
+                render();
+            }
+            closeModal();
+        }
+
+        function handleAvatarUpload(input) {
+            const file = input.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                // 压缩图片逻辑 (略微简化，直接用canvas)
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    const max = 200;
+                    if(w > h && w > max) { h *= max/w; w = max; }
+                    else if(h >= w && h > max) { w *= max/h; h = max; }
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img,0,0,w,h);
+                    profile.avatar = canvas.toDataURL('image/jpeg', 0.8);
+                    dbSet(KEY, JSON.stringify(profile)).then(function() {
+                        render();
+                    });
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            input.value = '';
+        }
+
+        loadProfile();
+    </script>
+</body>
+</html>

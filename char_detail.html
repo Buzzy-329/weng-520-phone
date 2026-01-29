@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Character Detail</title>
+    <style id="dynamicPreviewStyles"></style>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    <style>
+        /* --- 1. 基础风格 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(180deg, #fff0f5 0%, #ffeef2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #5d5d5d;
+            display: flex; flex-direction: column; overflow: hidden; position: relative;
+        }
+
+        /* --- 2. 顶部导航 --- */
+        .nav-bar {
+            padding: 40px 24px 15px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 100; flex-shrink: 0;
+            background: rgba(255, 240, 245, 0.85); backdrop-filter: blur(10px);
+            position: absolute; top: 0; left: 0; width: 100%; border-bottom: 1px solid rgba(255,255,255,0.5);
+        }
+        .nav-btn {
+            width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, 0.6);
+            display: flex; justify-content: center; align-items: center; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(255, 182, 193, 0.2); font-size: 18px; color: #888; border: none;
+        }
+        .nav-btn:active { transform: scale(0.9); }
+        .page-title { font-size: 17px; font-weight: 600; color: #7a6a6a; }
+        .btn-save-top { color: #ffb7c5; font-weight: bold; font-size: 14px; width: auto; padding: 0 15px; border-radius: 20px; }
+
+        /* --- 3. 内容区域 --- */
+        .content-scroll-area {
+            flex: 1; margin-top: 95px; padding: 10px 20px 40px 20px;
+            overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 20px;
+        }
+        .content-scroll-area::-webkit-scrollbar { display: none; }
+        
+        .white-box {
+            background: rgba(255, 255, 255, 0.9); border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(255, 182, 193, 0.15), 0 4px 10px rgba(255, 255, 255, 0.5);
+            padding: 20px; display: flex; flex-direction: column; gap: 15px;
+        }
+        .section-label { font-size: 12px; color: #ffb7c5; font-weight: 700; letter-spacing: 1px; margin-bottom: -5px; text-transform: uppercase; }
+
+        /* 头像与名字 */
+        .profile-header { display: flex; align-items: center; gap: 15px; }
+        .avatar-wrap {
+            position: relative; width: 70px; height: 70px; flex-shrink: 0;
+            border-radius: 50%; overflow: hidden; cursor: pointer;
+            border: 3px solid #fff; box-shadow: 0 5px 15px rgba(255,182,193,0.3); background: #eee;
+        }
+        .avatar-img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 20px; background: rgba(0,0,0,0.3); color: #fff; font-size: 10px; display: flex; justify-content: center; align-items: center; }
+        .name-inputs { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+        .input-line { width: 100%; border: none; background: transparent; border-bottom: 1px solid #ffeef2; padding: 5px 0; font-size: 15px; color: #555; }
+        .input-line:focus { border-bottom-color: #ffb7c5; }
+        .input-sub { font-size: 13px; color: #888; } 
+
+        .select-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 15px; background: #fff8fa; border-radius: 16px;
+            cursor: pointer; font-size: 14px; color: #666;
+        }
+        .select-row:active { background: #fff0f5; }
+        .select-value { color: #ffb7c5; font-weight: 600; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .persona-box {
+            width: 100%; height: 120px; background: #fffbfd; border: 1px solid #ffeef2;
+            border-radius: 16px; padding: 12px; font-size: 14px; color: #555; line-height: 1.5; resize: none; overflow-y: auto;
+        }
+        .persona-box::-webkit-scrollbar { width: 4px; }
+        .persona-box::-webkit-scrollbar-thumb { background: #ffdae0; border-radius: 4px; }
+
+        .btn-row { display: flex; gap: 10px; margin-top: 5px; }
+        .small-btn {
+            flex: 1; padding: 10px; border-radius: 12px; border: none;
+            font-size: 12px; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 5px;
+        }
+        .btn-pink { background: #fff0f5; color: #ffb7c5; border: 1px solid #ffeef2; }
+        .btn-outline { background: #fff; color: #888; border: 1px solid #eee; }
+
+        .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; }
+        .num-input { width: 60px; padding: 8px; border-radius: 10px; border: 1px solid #ffeef2; text-align: center; font-size: 13px; background: #fff8fa; }
+        .text-input-small { width: 100px; padding: 8px; border-radius: 10px; border: 1px solid #ffeef2; text-align: right; font-size: 13px; background: #fff8fa; }
+        
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #eee; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #ffb7c5; }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* --- 预览区专用基础样式 (加在 .preview-img-box 样式后面) --- */
+#chatBgPreview .bubble {
+    padding: 10px 15px;
+    font-size: 13px;
+    position: relative;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+/* 默认样式，防止没输CSS时看不见 */
+#chatBgPreview .msg-row.ai .bubble { background: #fff; color: #333; border-radius: 15px 15px 15px 4px; }
+#chatBgPreview .msg-row.me .bubble { background: #0099FF; color: #fff; border-radius: 15px 15px 4px 15px; }
+
+
+        .preview-img-box { 
+    width: 100%; 
+    height: 240px; /* <--- 改这里，240px 足够显示大贴纸了 */
+    background: #eee; 
+    border-radius: 12px; 
+    overflow: hidden; 
+    background-size: cover; 
+    background-position: center; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 10px; 
+}
+        .bubble-demo { padding: 8px 12px; max-width: 80%; font-size: 13px; position: relative; }
+        .bubble-default-ai { background: #fff; border-radius: 15px 15px 15px 4px; color: #333; }
+        .bubble-default-user { background: #0099FF; border-radius: 15px 15px 4px 15px; color: #fff; }
+
+        .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .tool-btn { padding: 12px; background: #fdfdfd; border: 1px solid #f0f0f0; border-radius: 14px; font-size: 13px; color: #666; text-align: center; cursor: pointer; }
+        .btn-danger { color: #ff6b6b; border-color: #ffebeb; background: #fff5f5; }
+
+        /* --- 弹窗 --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.2); backdrop-filter: blur(5px);
+            z-index: 1000; display: none; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .modal-overlay.show { opacity: 1; }
+        .modal-box {
+            width: 320px; background: #fff; border-radius: 24px; padding: 25px;
+            box-shadow: 0 0 25px rgba(255, 182, 193, 0.5), 0 10px 40px rgba(255, 182, 193, 0.4);
+            display: flex; flex-direction: column; gap: 15px;
+            max-height: 70vh; transform: scale(0.9); transition: transform 0.3s;
+        }
+        .modal-overlay.show .modal-box { transform: scale(1); }
+        .modal-title { font-size: 16px; font-weight: 700; color: #444; text-align: center; }
+        .modal-input { width: 100%; padding: 12px; border: 1px solid #ffeef2; background: #fffbfd; border-radius: 14px; font-size: 14px; outline: none; color: #555; }
+        .modal-list { overflow-y: auto; max-height: 200px; display: flex; flex-direction: column; gap: 8px; }
+        .list-item { padding: 12px; background: #f9f9f9; border-radius: 12px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .modal-btns { display: flex; gap: 10px; margin-top: 10px; }
+        .modal-btn { flex: 1; padding: 12px; border-radius: 14px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .btn-cancel { background: #f2f2f2; color: #888; }
+        .btn-confirm { background: #ffb7c5; color: #fff; }
+
+        .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-100px); background: rgba(255,255,255,0.95); padding: 12px 25px; border-radius: 30px; box-shadow: 0 5px 20px rgba(255, 182, 193, 0.3); font-size: 13px; color: #555; transition: transform 0.3s; z-index: 2000; }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        
+        #hiddenFileInput { display: none; }
+        
+        /* 天气输入组 */
+        .weather-group { margin-top: 5px; padding: 10px; background: #fffbfd; border-radius: 12px; }
+        .weather-row { display: flex; gap: 10px; margin-bottom: 5px; }
+        .weather-label { font-size: 11px; color: #999; margin-bottom: 3px; display:block; }
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <button class="nav-btn" onclick="openConfirmModal('exit')">←</button>
+        <div class="page-title">角色详细设定</div>
+        <button class="nav-btn btn-save-top" onclick="saveAllSettings()">保存</button>
+    </div>
+
+    <div class="content-scroll-area">
+        <div class="white-box">
+            <div class="section-label">角色信息</div>
+            <div class="profile-header">
+                <div class="avatar-wrap" onclick="triggerUpload('charAvatar')">
+                    <img id="charAvatarImg" class="avatar-img" src="" style="display:none">
+                    <div id="charAvatarPlaceholder" style="width:100%;height:100%;background:#eee;color:#ccc;display:flex;justify-content:center;align-items:center;font-size:10px;">无头像</div>
+                    <div class="avatar-overlay">更换</div>
+                </div>
+                <div class="name-inputs">
+                    <input type="text" class="input-line" id="charDisplayName" placeholder="备注名 (用户可见)">
+                    <input type="text" class="input-line input-sub" id="charTrueName" placeholder="本名 (模型读取)">
+                </div>
+            </div>
+        </div>
+
+        <div class="white-box">
+            <div class="section-label">你在Ta眼中的形象</div>
+            <div class="profile-header">
+                <div class="avatar-wrap" onclick="triggerUpload('userAvatar')">
+                    <img id="userAvatarImg" class="avatar-img" src="" style="display:none">
+                    <div id="userAvatarPlaceholder" style="width:100%;height:100%;background:#eee;color:#ccc;display:flex;justify-content:center;align-items:center;font-size:10px;">无头像</div>
+                    <div class="avatar-overlay">更换</div>
+                </div>
+                <div class="name-inputs">
+                    <input type="text" class="input-line" id="userNickName" placeholder="角色给你的备注 (昵称)">
+                    <div style="font-size:11px; color:#aaa; margin-top:4px;">* 此昵称角色可随机更改，用户真实姓名请写在下方人设中</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="white-box" onclick="openGroupModal()">
+            <div class="section-label">好友分组</div>
+            <div class="select-row"><span>当前分组</span><span class="select-value" id="currentGroupDisplay">未分组 ></span></div>
+        </div>
+
+        <div class="white-box">
+            <div class="section-label">角色人设 (Prompt)</div>
+            <textarea class="persona-box" id="charPersona" placeholder="输入角色的详细设定，性格，背景故事..."></textarea>
+        </div>
+
+        <div class="white-box">
+            <div class="section-label">用户人设 (User Persona)</div>
+            <textarea class="persona-box" id="userPersona" placeholder="输入你的真实姓名和人设..."></textarea>
+            <div class="btn-row">
+                <button class="small-btn btn-outline" onclick="openPresetListModal('user')">选择预设</button>
+                <button class="small-btn btn-pink" onclick="openSavePresetModal('user')">保存为预设</button>
+            </div>
+        </div>
+
+        <div class="white-box">
+            <div class="section-label">逻辑与记忆</div>
+            <div class="select-row" onclick="openWorldBookModal()"><span>世界书 (World Book)</span><span class="select-value" id="currentWorldBook">无 ></span></div>
+            <div class="setting-row"><span class="setting-label">短期记忆条数</span><input type="number" class="num-input" id="shortMemCount" value="20"></div>
+            <div class="setting-row"><span class="setting-label">自动总结开关</span><div class="setting-right"><label class="switch"><input type="checkbox" id="autoSummarySwitch"><span class="slider"></span></label></div></div>
+            <div class="setting-row"><span class="setting-label">自动总结阈值</span><input type="number" class="num-input" id="autoSummaryThreshold" value="100"></div>
+            <!-- 新增：自定义总结指令 -->
+            <div style="margin-top:10px;">
+                <span class="setting-label">自定义总结指令 (可选)</span>
+                <textarea class="persona-box" style="height:80px; margin-top:5px; font-size:12px;" id="summaryPrompt" placeholder="留空则使用默认指令。&#10;示例：请以第一人称日记的形式总结这段对话..."></textarea>
+            </div>
+            <button class="small-btn btn-pink" style="width:100%; margin-top:5px;" onclick="triggerManualSummary()">✨ 立即手动总结 (智能生成)</button>
+            <div class="select-row" style="margin-top:10px;" onclick="openLongMemModal()"><span>长期记忆库</span><span class="select-value" id="longMemCount">0条 ></span></div>
+            <div class="setting-row" style="margin-top:10px; border-top:1px solid #ffeef2; padding-top:10px;">
+    <span class="setting-label" style="color:#ffb7c5; font-weight:bold;">线下模式 (小说模式)</span>
+    <div class="setting-right">
+        <label class="switch"><input type="checkbox" id="offlineModeSwitch"><span class="slider"></span></label>
+    </div>
+</div>
+<!-- 只有开启线下模式才显示的人称显示区 -->
+<div class="select-row" id="offlinePerspectiveRow" style="display:none; margin-top:5px; background:#fff0f5;" onclick="openPerspectiveModal()">
+    <span>叙述人称</span>
+    <span class="select-value" id="currentPerspectiveDisplay">第二人称 ></span>
+</div>
+<!-- 新增：双语模式独立开关 -->
+            <div class="setting-row" style="margin-top:10px; border-top:1px solid #ffeef2; padding-top:10px;">
+                <span class="setting-label" style="color:#ffb7c5; font-weight:bold;">双语模式</span>
+                <div class="setting-right">
+                    <label class="switch"><input type="checkbox" id="bilingualModeSwitch"><span class="slider"></span></label>
+                </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#aaa;margin-top:5px;"><span>当前对话: <span id="statMsgCount">0</span>条</span><span>Token: <span id="statTokenCount">0</span></span></div>
+        </div>
+
+        <div class="white-box">
+            <div class="section-label">环境感知</div>
+            <div class="setting-row">
+                <span class="setting-label">时间感知 (时区)</span>
+                <div class="setting-right">
+                    <label class="switch"><input type="checkbox" id="timeSenseSwitch"><span class="slider"></span></label>
+                </div>
+            </div>
+            <!-- 时区选择器 -->
+            <div class="select-row" id="timeZoneSelectRow" onclick="openTimeZoneModal()" style="margin-top:5px; padding:10px;">
+                <span>选择时区</span>
+                <span class="select-value" id="currentTimeZoneDisplay">背景系统时间 ></span>
+            </div>
+
+            <div class="setting-row" style="margin-top:10px;">
+                <span class="setting-label">天气感知</span>
+                <div class="setting-right">
+                    <label class="switch"><input type="checkbox" id="weatherSenseSwitch"><span class="slider"></span></label>
+                </div>
+            </div>
+            <div id="weatherConfigArea" style="display:none; flex-direction:column; gap:8px;">
+                <div class="weather-group">
+                    <span class="weather-label" style="color:#ffb7c5; font-weight:bold;">角色天气设定</span>
+                    <div class="weather-row">
+                        <div style="flex:1">
+                            <span class="weather-label">虚拟名 (角色认为自己在)</span>
+                            <input type="text" class="input-line" style="font-size:13px; width:100%" id="charWeatherVirtualLoc" placeholder="虚拟地名">
+                        </div>
+                        <div style="flex:1">
+                            <span class="weather-label">真实地点 (用于API读取)</span>
+                            <input type="text" class="input-line" style="font-size:13px; width:100%" id="charWeatherRealLoc" placeholder="省份/城市">
+                        </div>
+                    </div>
+                </div>
+                <div class="weather-group">
+                    <span class="weather-label" style="color:#007AFF; font-weight:bold;">用户天气设定</span>
+                    <div class="weather-row">
+                        <div style="flex:1">
+                            <span class="weather-label">虚拟名 (角色认为你在)</span>
+                            <input type="text" class="input-line" style="font-size:13px; width:100%" id="userWeatherVirtualLoc" placeholder="虚拟地名">
+                        </div>
+                        <div style="flex:1">
+                            <span class="weather-label">真实地点 (用于API读取)</span>
+                            <input type="text" class="input-line" style="font-size:13px; width:100%" id="userWeatherRealLoc" placeholder="省份/城市">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="white-box">
+            <div class="section-label">界面美化</div>
+            <div class="setting-row">
+    <span class="setting-label">聊天背景</span>
+    <div style="display:flex; gap:10px;">
+        <button class="small-btn btn-outline" style="width: auto;" onclick="triggerUpload('chatBg')">相册上传</button>
+        <button class="small-btn btn-outline" style="width: auto;" onclick="triggerUrlInput('chatBg')">URL导入</button>
+    </div>
+</div>
+            <div class="preview-img-box" id="chatBgPreview">
+    <div style="width:90%; padding: 20px 0; display:flex; flex-direction:column; gap:25px;">
+        <!-- 模拟对方消息结构 -->
+        <div class="msg-row ai" style="display:flex; width:100%; position:relative;">
+            <div class="bubble" id="demoAiBubble">角色气泡预览</div>
+        </div>
+        <!-- 模拟我的消息结构 -->
+        <div class="msg-row me" style="display:flex; width:100%; justify-content:flex-end; position:relative;">
+            <div class="bubble" id="demoUserBubble">用户气泡预览</div>
+        </div>
+    </div>
+</div>
+            <div style="margin-top:15px;"><span class="setting-label">气泡样式 (CSS)</span><textarea class="persona-box" style="height:80px; margin-top:5px;" id="bubbleCss" placeholder=".bubble { background: pink; }"></textarea></div>
+            <div style="margin-top:15px;">
+    <span class="setting-label">全界面UI样式 (CSS)</span>
+    <textarea class="persona-box" style="height:100px; margin-top:5px;" id="uiCss" placeholder="/* 自定义上下栏样式 */
+.chat-header { background: rgba(0,0,0,0.5); }
+.input-bar-wrap { background: black; }"></textarea>
+</div>
+            <div class="btn-row"><button class="small-btn btn-outline" onclick="openPresetListModal('bubble')">选择样式预设</button><button class="small-btn btn-pink" onclick="openSavePresetModal('bubble')">保存当前样式</button></div>
+        </div>
+
+        <div class="white-box">
+            <div class="section-label">聊天记录管理</div>
+            <div class="tool-grid">
+                <div class="tool-btn" onclick="openSearchModal()">🔍 查找记录</div>
+                <div class="tool-btn btn-danger" onclick="openConfirmModal('clear')">🗑️ 清空记录</div>
+                <div class="tool-btn" onclick="exportHistory()">📤 导出记录</div>
+                <div class="tool-btn" onclick="triggerImport()">📥 导入记录</div>
+            </div>
+        </div>
+    </div>
+    <input type="file" id="hiddenFileInput">
+
+    <!-- 弹窗们 -->
+    <div class="modal-overlay" id="modal-input-name">
+        <div class="modal-box"><div class="modal-title" id="inputModalTitle">输入名称</div><input type="text" class="modal-input" id="genericInput" autocomplete="off"><div class="modal-btns"><button class="modal-btn btn-cancel" onclick="closeModal('modal-input-name')">取消</button><button class="modal-btn btn-confirm" id="btnConfirmInput">确定</button></div></div>
+    </div>
+    <div class="modal-overlay" id="modal-list-select">
+        <div class="modal-box"><div class="modal-title" id="listModalTitle">选择</div><div class="modal-list" id="genericListContainer"></div><div class="modal-btns"><button class="modal-btn btn-confirm" id="btnAddToList" style="display:none;">+ 添加</button><button class="modal-btn btn-cancel" onclick="closeModal('modal-list-select')">关闭</button></div></div>
+    </div>
+    <div class="modal-overlay" id="modal-long-mem">
+        <div class="modal-box"><div class="modal-title">长期记忆管理</div><div class="modal-list" id="longMemList" style="max-height: 300px;"></div><div class="modal-btns"><button class="modal-btn btn-cancel" onclick="addLongMem()">+ 添加</button><button class="modal-btn btn-confirm" onclick="saveLongMemChanges()">保存修改</button></div></div>
+    </div>
+    <div class="modal-overlay" id="modal-confirm">
+        <div class="modal-box"><div class="modal-title">提示</div><div style="text-align:center;color:#666" id="confirmMsg"></div><div class="modal-btns"><button class="modal-btn btn-cancel" onclick="closeModal('modal-confirm')">取消</button><button class="modal-btn btn-confirm" id="btnConfirmAction">确定</button></div></div>
+    </div>
+    <!-- 搜索弹窗 -->
+    <div class="modal-overlay" id="modal-search">
+        <div class="modal-box">
+            <div class="modal-title">查找聊天记录</div>
+            <input type="text" class="modal-input" id="searchInput" placeholder="输入关键词...">
+            <button class="small-btn btn-pink" style="width:100%" onclick="doSearch()">搜索</button>
+            <div class="modal-list" id="searchResultList" style="max-height: 200px; margin-top:10px;"></div>
+            <button class="modal-btn btn-cancel" style="width:100%" onclick="closeModal('modal-search')">关闭</button>
+        </div>
+    </div>
+    <!-- 新增：人称选择弹窗 -->
+<div class="modal-overlay" id="modal-perspective">
+    <div class="modal-box">
+        <div class="modal-title">选择线下模式人称</div>
+        <div style="font-size:12px; color:#999; margin-bottom:10px; line-height:1.4;">
+            <b>第二人称：</b>原文称呼用户为“你”，称呼角色为“他/她/名字”。<br>
+            <b>第三人称：</b>原文称呼用户为“本名”，称呼角色为“本名”。(无“你/我”)
+        </div>
+        <div class="modal-list">
+            <div class="list-item" onclick="selectPerspective('2nd')">
+                <span>第二人称 (你 & 他/她)</span>
+                <span id="mark-2nd" style="color:#ffb7c5; font-weight:bold; display:none;">✓</span>
+            </div>
+            <div class="list-item" onclick="selectPerspective('3rd')">
+                <span>第三人称 (名字 & 名字)</span>
+                <span id="mark-3rd" style="color:#ffb7c5; font-weight:bold; display:none;">✓</span>
+            </div>
+        </div>
+        <div class="modal-btns">
+            <button class="modal-btn btn-cancel" onclick="closeModal('modal-perspective')">关闭</button>
+        </div>
+    </div>
+</div>
+
+    <div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+    <script>
+        const detailChannel = new BroadcastChannel('buzzy_sync_channel');
+         // --- 新增：听到喊声后，重新加载数据 ---
+        detailChannel.onmessage = async (event) => {
+            if (event.data && event.data.type === 'refresh_list') {
+                await loadData(); // 重新读数据库
+                // 如果当前正在看这个角色，顺便刷新一下界面
+                if (currentChar && currentChar.id) {
+                    const latest = characters.find(c => c.id === currentChar.id);
+                    if (latest) {
+                        currentChar = latest;
+                        initUI(); // 刷新界面文字
+                    }
+                }
+            }
+        };
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+        const DB_KEY = 'qq_app_data_pro_max_final';
+        const PRESET_KEY = 'qq_app_presets_global';
+        const WB_KEY = 'wb_books';
+        let characters = [], currentChar = null, charIndex = -1;
+        let globalPresets = { userPersonas: [], bubbleStyles: [] };
+        let allGroups = new Set(['未分组', '我的好友', '特别关心']); 
+
+         window.onload = async function() {
+            // 1. 配置 localforage 连接到和 chat_window 一样的数据库
+            await loadData(); // 先加载所有数据
+            
+            // --- 【关键修复开始】 ---
+            // 优先从 URL 获取 ID (最稳)，如果没有再查数据库
+            const urlParams = new URLSearchParams(window.location.search);
+            let editId = urlParams.get('id');
+            if (!editId) {
+                 editId = await dbGet('edit_char_id');
+            }
+            
+            // 2. 如果新地方没有，说明是从旧版首页跳过来的，去旧地方拿
+            if (!editId) {
+                editId = localStorage.getItem('edit_char_id');
+            }
+            // --- 【关键修复结束】 ---
+
+            if(editId) {
+                // 找到了 ID，去数组里找对应的角色
+                charIndex = characters.findIndex(c => c.id === editId);
+                if(charIndex !== -1) { 
+                    currentChar = characters[charIndex]; 
+                    await initUI(); // 初始化界面
+                } 
+                else { 
+                    openConfirmModal('exit', '角色不存在，退出？'); 
+                }
+            } else { 
+                openConfirmModal('exit', '未指定角色，退出？'); 
+            }
+
+            // 绑定事件监听
+            document.getElementById('bubbleCss').addEventListener('input', (e) => applyPreviewCss(e.target.value));
+            document.getElementById('timeSenseSwitch').addEventListener('change', (e) => {
+               document.getElementById('timeZoneSelectRow').style.display = e.target.checked ? 'flex' : 'none'; 
+            });
+            document.getElementById('weatherSenseSwitch').addEventListener('change', (e) => {
+               document.getElementById('weatherConfigArea').style.display = e.target.checked ? 'flex' : 'none'; 
+            });
+        };
+
+        async function loadData() {
+            // 1. 尝试从 IndexedDB 读取
+            let raw = await dbGet(DB_KEY);
+            let rawPresets = await dbGet(PRESET_KEY);
+
+            // 2. 兼容旧数据 (LocalStorage 迁移)
+            if (!raw) {
+                const oldRaw = localStorage.getItem(DB_KEY);
+                if (oldRaw) {
+                    raw = oldRaw; 
+                    await dbSet(DB_KEY, raw); // 存入新库
+                }
+            }
+            if (!rawPresets) {
+                const oldPresets = localStorage.getItem(PRESET_KEY);
+                if (oldPresets) {
+                    rawPresets = oldPresets;
+                    await dbSet(PRESET_KEY, rawPresets);
+                }
+            }
+
+            // 3. 解析数据
+            if(raw) {
+                try { characters = JSON.parse(raw); } catch(e) {}
+            }
+            if(rawPresets) {
+                try { globalPresets = JSON.parse(rawPresets); } catch(e) {}
+            }
+        }
+        async function saveData() { 
+            if(charIndex !== -1 && currentChar) { 
+                characters[charIndex] = currentChar; 
+                // 存为字符串
+                await dbSet(DB_KEY, JSON.stringify(characters)); 
+            }
+            // 存为字符串
+            await dbSet(PRESET_KEY, JSON.stringify(globalPresets)); 
+            
+            detailChannel.postMessage({ type: 'refresh_list' });
+        }
+
+        async function initUI() { // <--- 加了 async
+            document.getElementById('charDisplayName').value = currentChar.name || '';
+            document.getElementById('charTrueName').value = currentChar.trueName || currentChar.name || '';
+            document.getElementById('userNickName').value = currentChar.userNickName || '';
+            if(currentChar.avatar) document.getElementById('charAvatarImg').src = currentChar.avatar, document.getElementById('charAvatarImg').style.display = 'block', document.getElementById('charAvatarPlaceholder').style.display = 'none';
+            if(currentChar.userAvatar) document.getElementById('userAvatarImg').src = currentChar.userAvatar, document.getElementById('userAvatarImg').style.display = 'block', document.getElementById('userAvatarPlaceholder').style.display = 'none';
+            document.getElementById('currentGroupDisplay').innerText = (currentChar.group || '未分组') + ' >';
+            document.getElementById('charPersona').value = currentChar.persona || '';
+            document.getElementById('userPersona').value = currentChar.userPersona || '';
+            
+           // 世界书 (World Book) - 修复显示多本
+            let wbText = '无 >';
+            if (!currentChar.worldBookIds) currentChar.worldBookIds = [];
+            if (currentChar.worldBookId && !currentChar.worldBookIds.includes(currentChar.worldBookId)) {
+                currentChar.worldBookIds.push(currentChar.worldBookId);
+            }
+            if(currentChar.worldBookIds.length > 0) {
+                // ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ 修改了这一行 ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
+                const rawBooks = await dbGet(WB_KEY) || '[]'; 
+                const books = JSON.parse(rawBooks);
+                // ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
+                const selectedNames = books.filter(b => currentChar.worldBookIds.includes(b.id)).map(b => b.name);
+                if (selectedNames.length > 0) {
+                    wbText = selectedNames.length === 1 ? selectedNames[0] + ' >' : `已选 ${selectedNames.length} 本 >`;
+                }
+            }
+            document.getElementById('currentWorldBook').innerText = wbText;
+
+            document.getElementById('shortMemCount').value = currentChar.shortMemCount || 20;
+            document.getElementById('autoSummarySwitch').checked = currentChar.autoSummary || false;
+            document.getElementById('autoSummaryThreshold').value = currentChar.autoSummaryThreshold || 100;
+            document.getElementById('summaryPrompt').value = currentChar.summaryPrompt || '';
+            
+            const history = currentChar.history || [];
+            document.getElementById('statMsgCount').innerText = history.length;
+            let tokens = 0; 
+// 读取设置的条数，默认20
+const limit = currentChar.shortMemCount || 20;
+// 只截取最后 limit 条进行计算
+const activeSlice = history.slice(-limit);
+activeSlice.forEach(m => tokens += m.content.length * 1.5);
+document.getElementById('statTokenCount').innerText = Math.floor(tokens);
+            document.getElementById('longMemCount').innerText = (currentChar.longTermMemories || []).length + '条 >';
+
+            // 时间
+            document.getElementById('timeSenseSwitch').checked = currentChar.timeSense || false;
+            document.getElementById('timeZoneSelectRow').style.display = currentChar.timeSense ? 'flex' : 'none';
+            document.getElementById('currentTimeZoneDisplay').innerText = (currentChar.timeZoneName || '背景系统时间') + ' >';
+
+            // 天气
+            document.getElementById('weatherSenseSwitch').checked = currentChar.weatherSense || false;
+            document.getElementById('weatherConfigArea').style.display = currentChar.weatherSense ? 'flex' : 'none';
+            document.getElementById('charWeatherVirtualLoc').value = currentChar.charWeatherVirtualLoc || '';
+            document.getElementById('charWeatherRealLoc').value = currentChar.charWeatherRealLoc || '';
+            document.getElementById('userWeatherVirtualLoc').value = currentChar.userWeatherVirtualLoc || '';
+            document.getElementById('userWeatherRealLoc').value = currentChar.userWeatherRealLoc || '';
+            document.getElementById('offlineModeSwitch').checked = currentChar.isOfflineMode || false;
+// 如果开启了，显示人称选择行
+document.getElementById('offlinePerspectiveRow').style.display = currentChar.isOfflineMode ? 'flex' : 'none';
+document.getElementById('bilingualModeSwitch').checked = currentChar.bilingualMode || false;
+// 显示当前选中的人称
+const pMap = {'2nd': '第二人称', '3rd': '第三人称'};
+document.getElementById('currentPerspectiveDisplay').innerText = (pMap[currentChar.offlinePerspective] || '第二人称') + ' >';
+
+            if(currentChar.chatBg) document.getElementById('chatBgPreview').style.backgroundImage = `url(${currentChar.chatBg})`;
+            document.getElementById('bubbleCss').value = currentChar.bubbleCss || '';
+            document.getElementById('uiCss').value = currentChar.uiCss || ''; 
+            applyPreviewCss(currentChar.bubbleCss || '');
+        }
+
+        function saveAllSettings() {
+            if(!currentChar) return;
+            currentChar.name = document.getElementById('charDisplayName').value;
+            currentChar.trueName = document.getElementById('charTrueName').value;
+            currentChar.userNickName = document.getElementById('userNickName').value;
+            currentChar.persona = document.getElementById('charPersona').value;
+            currentChar.userPersona = document.getElementById('userPersona').value;
+            currentChar.shortMemCount = parseInt(document.getElementById('shortMemCount').value) || 20;
+            currentChar.autoSummary = document.getElementById('autoSummarySwitch').checked;
+            currentChar.autoSummaryThreshold = parseInt(document.getElementById('autoSummaryThreshold').value) || 100;
+            currentChar.summaryPrompt = document.getElementById('summaryPrompt').value;
+            
+            currentChar.timeSense = document.getElementById('timeSenseSwitch').checked;
+            // timeZoneValue and timeZoneName are set in modal
+            
+            currentChar.weatherSense = document.getElementById('weatherSenseSwitch').checked;
+            currentChar.charWeatherVirtualLoc = document.getElementById('charWeatherVirtualLoc').value;
+            currentChar.charWeatherRealLoc = document.getElementById('charWeatherRealLoc').value;
+            currentChar.userWeatherVirtualLoc = document.getElementById('userWeatherVirtualLoc').value;
+            currentChar.userWeatherRealLoc = document.getElementById('userWeatherRealLoc').value;
+            currentChar.isOfflineMode = document.getElementById('offlineModeSwitch').checked;
+            currentChar.bilingualMode = document.getElementById('bilingualModeSwitch').checked;
+// offlinePerspective 已经在选择时直接保存到 currentChar (或者暂存变量) 了，这里为了保险可以不写，或者确保在 selectPerspective 里赋值
+
+            currentChar.bubbleCss = document.getElementById('bubbleCss').value;
+            currentChar.uiCss = document.getElementById('uiCss').value;
+            saveData(); showToast("设定已保存并应用");
+            setTimeout(() => { if(window.parent && window.parent.closeCharDetail) window.parent.closeCharDetail(); else history.back(); }, 800);
+        }
+
+        let uploadType = '';
+        function triggerUpload(type) { uploadType = type; const input = document.getElementById('hiddenFileInput'); input.accept = "image/*"; input.onchange = handleFile; input.click(); }
+        function handleFile(e) {
+            const file = e.target.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => {
+                    // 【修改点】背景图最大 1080px，头像最大 300px (足够清晰了)
+                    const canvas = document.createElement('canvas'); 
+let w = img.width, h = img.height, max = uploadType === 'chatBg' ? 1620 : 300;
+if(w > h && w > max) { h *= max/w; w = max; } else if(h > w && h > max) { w *= max/h; h = max; }
+canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+// 【修改点】质量改为 0.6，大幅节省空间
+const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    if(uploadType === 'charAvatar') { document.getElementById('charAvatarImg').src = dataUrl; document.getElementById('charAvatarImg').style.display='block'; document.getElementById('charAvatarPlaceholder').style.display='none'; currentChar.avatar = dataUrl; }
+                    else if(uploadType === 'userAvatar') { document.getElementById('userAvatarImg').src = dataUrl; document.getElementById('userAvatarImg').style.display='block'; document.getElementById('userAvatarPlaceholder').style.display='none'; currentChar.userAvatar = dataUrl; }
+                    else if(uploadType === 'chatBg') { document.getElementById('chatBgPreview').style.backgroundImage = `url(${dataUrl})`; currentChar.chatBg = dataUrl; }
+                }; img.src = evt.target.result;
+            }; reader.readAsDataURL(file); e.target.value = '';
+        }
+
+        // 【新增函数】处理 URL 导入
+function triggerUrlInput(type) {
+    // 复用已有的输入弹窗，回调函数处理逻辑
+    openInputModal("请输入图片链接 (URL)", (url) => {
+        if (!url) return;
+        // 简单的去空验证
+        url = url.trim();
+        if (type === 'chatBg') {
+            document.getElementById('chatBgPreview').style.backgroundImage = `url(${url})`;
+            currentChar.chatBg = url;
+            showToast("背景已通过 URL 更改");
+        }
+    });
+}
+
+        // 时区选择 Modal
+        function openTimeZoneModal() {
+            const container = document.getElementById('genericListContainer'); container.innerHTML = '';
+            document.getElementById('listModalTitle').innerText = '选择时间感知时区';
+            document.getElementById('btnAddToList').style.display = 'none';
+
+            // 定义时区列表
+            const zones = [
+                {name: "背景系统时间 (默认)", val: ""},
+                {name: "中国时间 (Beijing)", val: "Asia/Shanghai"},
+                {name: "日本时间 (Tokyo)", val: "Asia/Tokyo"},
+                {name: "美国东部 (New York)", val: "America/New_York"},
+                {name: "美国西部 (Los Angeles)", val: "America/Los_Angeles"},
+                {name: "英国时间 (London)", val: "Europe/London"},
+                {name: "奥克兰冬令时/标准时 (Auckland)", val: "Pacific/Auckland"}, // JS Intl 会自动处理冬夏令时，只要指定区域
+                {name: "澳大利亚东部 (Sydney)", val: "Australia/Sydney"},
+                {name: "法国时间 (Paris)", val: "Europe/Paris"},
+                {name: "俄罗斯 (Moscow)", val: "Europe/Moscow"}
+            ];
+
+            zones.forEach(z => {
+                let div = document.createElement('div'); div.className = 'list-item';
+                div.innerHTML = `<span>${z.name}</span>` + (currentChar.timeZoneValue === z.val ? '<span style="color:#ffb7c5">●</span>' : '');
+                div.onclick = () => { 
+                    currentChar.timeZoneValue = z.val; 
+                    currentChar.timeZoneName = z.name;
+                    document.getElementById('currentTimeZoneDisplay').innerText = z.name + ' >'; 
+                    closeModal('modal-list-select'); 
+                };
+                container.appendChild(div);
+            });
+            openModal('modal-list-select');
+        }
+
+        // 这里的代码是新加的，用于打开世界书选择弹窗
+        async function openWorldBookModal() { // <--- 加了 async
+            const rawBooks = await dbGet(WB_KEY) || '[]';
+            const books = JSON.parse(rawBooks);
+            const container = document.getElementById('genericListContainer'); 
+            container.innerHTML = '';
+            document.getElementById('listModalTitle').innerText = '选择世界书 (可多选)';
+            
+            // 初始化数组
+            if (!currentChar.worldBookIds) currentChar.worldBookIds = [];
+            if (currentChar.worldBookId && !currentChar.worldBookIds.includes(currentChar.worldBookId)) {
+                currentChar.worldBookIds.push(currentChar.worldBookId);
+            }
+
+            // 显示并设置"确定"按钮
+            const btnConfirm = document.getElementById('btnAddToList');
+            btnConfirm.style.display = 'block';
+            btnConfirm.innerText = '确定完成'; 
+            
+            btnConfirm.onclick = () => {
+                let wbText = '无 >';
+                const selectedNames = books.filter(b => currentChar.worldBookIds.includes(b.id)).map(b => b.name);
+                if (selectedNames.length > 0) {
+                    wbText = selectedNames.length === 1 ? selectedNames[0] + ' >' : `已选 ${selectedNames.length} 本 >`;
+                }
+                document.getElementById('currentWorldBook').innerText = wbText;
+                closeModal('modal-list-select');
+            };
+            
+            // 渲染列表
+            books.forEach(b => {
+                let div = document.createElement('div'); 
+                div.className = 'list-item';
+                const isSelected = currentChar.worldBookIds.includes(b.id);
+                div.innerHTML = `<span style="${isSelected ? 'color:#ffb7c5;font-weight:bold' : ''}">${b.name}</span>` + 
+                                (isSelected ? '<span style="color:#ffb7c5; font-weight:bold;">✓</span>' : '');
+                div.onclick = () => {
+                    const idx = currentChar.worldBookIds.indexOf(b.id);
+                    if (idx > -1) { currentChar.worldBookIds.splice(idx, 1); } 
+                    else { currentChar.worldBookIds.push(b.id); }
+                    openWorldBookModal(); // 刷新列表状态
+                };
+                container.appendChild(div);
+            });
+            openModal('modal-list-select');
+        }
+
+        // 搜索功能
+        function openSearchModal() { openModal('modal-search'); document.getElementById('searchInput').value = ''; document.getElementById('searchResultList').innerHTML = ''; }
+        async function doSearch() { // <--- 加了 async
+            const keyword = document.getElementById('searchInput').value.trim();
+            const list = document.getElementById('searchResultList'); list.innerHTML = '';
+            if(!keyword || !currentChar.history) return;
+            currentChar.history.forEach((msg, idx) => {
+                if(msg.content.includes(keyword)) {
+                    let div = document.createElement('div'); div.className = 'list-item';
+                    div.style.flexDirection = 'column'; div.style.alignItems = 'flex-start'; div.style.gap = '2px';
+                    div.innerHTML = `<span style="font-size:12px;color:#aaa">${new Date(msg.timestamp).toLocaleString()} - ${msg.role==='user'?'我':currentChar.name}</span><span style="font-size:13px;color:#333">${msg.content}</span>`;
+                    
+                    div.onclick = async () => {
+                        await dbSet('chat_jump_index', idx);
+                        if(window.parent && window.parent.closeCharDetail) window.parent.closeCharDetail();
+                        else history.back();
+                    };
+                    
+                    list.appendChild(div);
+                }
+            });
+            if(list.children.length === 0) list.innerHTML = '<div style="text-align:center;color:#ccc;font-size:12px">未找到记录</div>';
+        }
+
+        // 确认弹窗
+        function openConfirmModal(type, text) {
+            const msg = document.getElementById('confirmMsg');
+            const btn = document.getElementById('btnConfirmAction');
+            document.getElementById('modal-confirm').style.display = 'flex'; setTimeout(()=>document.getElementById('modal-confirm').classList.add('show'),10);
+            
+            if(type === 'exit') {
+                msg.innerText = text || "确定不保存直接退出吗？";
+                btn.onclick = () => { if(window.parent && window.parent.closeCharDetail) window.parent.closeCharDetail(); else history.back(); };
+            } else if (type === 'clear') {
+                msg.innerText = "确定清空聊天记录？长期记忆将保留。";
+                btn.onclick = () => { currentChar.history = []; saveData(); document.getElementById('statMsgCount').innerText='0'; document.getElementById('statTokenCount').innerText='0'; closeModal('modal-confirm'); showToast("已清空"); };
+            }
+        }
+
+        // 辅助函数
+        function openLongMemModal() {
+            const list = document.getElementById('longMemList'); list.innerHTML = '';
+            (currentChar.longTermMemories || []).forEach((m, idx) => {
+                let div = document.createElement('div'); div.className = 'list-item';
+                div.innerHTML = `<div contenteditable="true" id="mem-${idx}" style="flex:1;outline:none">${m}</div><div style="color:#ff8888;font-weight:bold;margin-left:10px" onclick="currentChar.longTermMemories.splice(${idx},1);openLongMemModal()">×</div>`;
+                list.appendChild(div);
+            }); openModal('modal-long-mem');
+        }
+        function addLongMem() { 
+            // 调用输入弹窗，输入完成后执行回调
+            openInputModal("添加长期记忆", (text) => {
+                if(text && text.trim()) {
+                    if(!currentChar.longTermMemories) currentChar.longTermMemories = [];
+                    currentChar.longTermMemories.push(text.trim());
+                    // 刷新长期记忆列表显示
+                    openLongMemModal();
+                    // 如果需要立即保存到本地存储，可以取消下面这行的注释，或者依赖后续的"保存修改"按钮
+                    // saveData(); 
+                }
+            });
+        }
+        function saveLongMemChanges() { 
+            let arr = []; document.querySelectorAll('[id^="mem-"]').forEach(el => arr.push(el.innerText));
+            currentChar.longTermMemories = arr; document.getElementById('longMemCount').innerText = arr.length + '条 >'; closeModal('modal-long-mem'); 
+        }
+        
+        function openGroupModal() {
+            characters.forEach(c => { if(c.group) allGroups.add(c.group); });
+            const container = document.getElementById('genericListContainer'); container.innerHTML = '';
+            document.getElementById('listModalTitle').innerText = '选择好友分组';
+            document.getElementById('btnAddToList').style.display = 'block'; document.getElementById('btnAddToList').innerText = '+ 添加分组';
+            document.getElementById('btnAddToList').onclick = () => { openInputModal("新分组名称", (val) => { if(val) { allGroups.add(val); openGroupModal(); } }); };
+            allGroups.forEach(g => {
+                let div = document.createElement('div'); div.className = 'list-item';
+                div.innerHTML = `<span>${g} ${currentChar.group === g ? '(当前)' : ''}</span>` + ((g!=='未分组'&&g!=='我的好友') ? `<div onclick="event.stopPropagation();allGroups.delete('${g}');openGroupModal()">×</div>` : '');
+                div.onclick = () => { currentChar.group = g; document.getElementById('currentGroupDisplay').innerText = g + ' >'; closeModal('modal-list-select'); };
+                container.appendChild(div);
+            }); openModal('modal-list-select');
+        }
+
+        function openPresetListModal(type) {
+            const container = document.getElementById('genericListContainer'); 
+            container.innerHTML = '';
+            document.getElementById('listModalTitle').innerText = type === 'user' ? '用户人设预设' : '气泡样式预设';
+            document.getElementById('btnAddToList').style.display = 'none';
+            
+            const targetArray = type === 'user' ? globalPresets.userPersonas : globalPresets.bubbleStyles;
+
+            targetArray.forEach((p, idx) => {
+                let div = document.createElement('div'); 
+                div.className = 'list-item';
+                
+                // 创建名字部分
+                let span = document.createElement('span');
+                span.innerText = p.name;
+                
+                // 创建删除按钮
+                let delBtn = document.createElement('div');
+                delBtn.innerText = '×';
+                delBtn.style.padding = '0 10px';
+                delBtn.style.cursor = 'pointer';
+                delBtn.style.fontWeight = 'bold';
+                
+                // 绑定删除事件
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); // 防止触发整行点击
+                    // 执行删除
+                    targetArray.splice(idx, 1);
+                    saveData();
+                    // 重新加载列表
+                    openPresetListModal(type); 
+                };
+
+                // 绑定整行点击应用事件
+                div.onclick = () => { 
+    if(type === 'user') {
+        document.getElementById('userPersona').value = p.content; 
+    } else { 
+        // 尝试解析 JSON (新版预设)，如果解析失败则兼容旧版(纯字符串)
+        try {
+            const styleObj = JSON.parse(p.content);
+            document.getElementById('bubbleCss').value = styleObj.bubble || '';
+            document.getElementById('uiCss').value = styleObj.ui || '';
+            applyPreviewCss(styleObj.bubble || '');
+        } catch(e) {
+            // 旧版预设只有 bubbleCss
+            document.getElementById('bubbleCss').value = p.content;
+            applyPreviewCss(p.content); 
+        }
+    } 
+    closeModal('modal-list-select'); 
+};
+
+                div.appendChild(span);
+                div.appendChild(delBtn);
+                container.appendChild(div);
+            }); 
+            openModal('modal-list-select');
+        }
+        function openSavePresetModal(type) {
+    openInputModal("为预设命名", (name) => {
+        if(!name) return;
+        
+        let content;
+        if (type === 'user') {
+            content = document.getElementById('userPersona').value;
+        } else {
+            // --- 修改点：CSS预设同时保存气泡样式和UI样式 ---
+            const bCss = document.getElementById('bubbleCss').value;
+            const uCss = document.getElementById('uiCss').value;
+            // 将两者打包成 JSON 字符串保存
+            content = JSON.stringify({ bubble: bCss, ui: uCss });
+        }
+
+        if(!content) return showToast("内容为空", true);
+        (type === 'user' ? globalPresets.userPersonas : globalPresets.bubbleStyles).push({ name: name, content: content });
+        saveData(); showToast("预设已保存");
+    });
+}
+
+        // 手动总结 (修复版：支持新版API配置 + 自定义指令)
+        async function triggerManualSummary() {
+            // 1. 优先读取 settings.html 保存的新版配置
+            let config = await dbGet('qq_ai_config');
+
+            // 2. 兼容旧逻辑
+            if (!config) {
+                const rawPresets = await dbGet('aiPhone_presets'); 
+                const currentId = await dbGet('aiPhone_currentId');
+                if (rawPresets && currentId) { 
+                    try { config = JSON.parse(rawPresets).find(p => p.id == currentId); } catch(e) {} 
+                }
+            }
+            
+            if(!config || !config.url || !config.key) {
+                return showToast("请先在首页设置API连接", true);
+            }
+
+            if(!currentChar.history || currentChar.history.length === 0) {
+                return showToast("没有聊天记录可总结", true);
+            }
+
+            showToast("正在请求模型总结...", false);
+
+            let cleanUrl = config.url.trim().replace(/\/+$/, '');
+            let fetchUrl = '';
+            if (cleanUrl.endsWith('/v1')) { fetchUrl = cleanUrl + '/chat/completions'; }
+            else if (cleanUrl.endsWith('/chat/completions')) { fetchUrl = cleanUrl; }
+            else { fetchUrl = cleanUrl + '/v1/chat/completions'; }
+            
+            // 取最近 200 条
+            const recent = currentChar.history.slice(-200).map(m => `${m.role}:${m.content}`).join('\n');
+            
+            // --- 核心修改：判断是否有自定义指令 ---
+            const defaultPrompt = "你是一个专业的记忆助手。请根据以下对话，总结出关键信息。总结必须包含：1.时间(大概发生时候) 2.人物(谁和谁) 3.事件(发生了什么) 4.约定或重要细节。请用简洁的语言总结，字数控制在200字以内，不要遗漏重要情节。";
+            const systemPrompt = currentChar.summaryPrompt && currentChar.summaryPrompt.trim() !== "" 
+                                 ? currentChar.summaryPrompt 
+                                 : defaultPrompt;
+
+            try {
+                const res = await fetch(fetchUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+                    body: JSON.stringify({
+                        model: config.model || 'gpt-3.5-turbo',
+                        messages: [
+                            {role: "system", content: systemPrompt}, // 使用动态判断后的 Prompt
+                            {role: "user", content: recent}
+                        ],
+                        temperature: 0.5
+                    })
+                });
+
+                if(res.ok) {
+                    const data = await res.json();
+                    if(data.choices && data.choices.length > 0) {
+                        const summary = `[手动总结 ${new Date().toLocaleString()}]: ` + data.choices[0].message.content;
+                        if(!currentChar.longTermMemories) currentChar.longTermMemories = [];
+                        currentChar.longTermMemories.push(summary);
+                        saveData();
+                        document.getElementById('longMemCount').innerText = currentChar.longTermMemories.length + '条 >';
+                        showToast("总结成功并已存入长期记忆！");
+                    } else {
+                        showToast("总结失败：无内容返回", true);
+                    }
+                } else {
+                    showToast("API请求失败", true);
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("网络错误", true);
+            }
+        }
+
+        function exportHistory() { const b = new Blob([JSON.stringify(currentChar)], {type:"application/json"}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `${currentChar.name}.json`; a.click(); }
+        function triggerImport() { document.getElementById('hiddenFileInput').accept=".json"; document.getElementById('hiddenFileInput').onchange=(e)=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=(ev)=>{ try{ currentChar={...currentChar, ...JSON.parse(ev.target.result), id:currentChar.id}; initUI(); saveData(); showToast("导入成功"); }catch(e){showToast("错误")} }; r.readAsText(f); }; document.getElementById('hiddenFileInput').click(); }
+
+        function applyPreviewCss(css) { 
+            const styleTag = document.getElementById('dynamicPreviewStyles');
+            if(!css || !css.trim()) {
+                styleTag.innerHTML = ""; // 如果清空了，就移除样式
+                return;
+            }
+
+            // 如果包含大括号，说明是完整的高级CSS，直接注入
+            if(css.includes('{')) {
+                // 为了防止预览样式影响全局，我们在所有选择器前加 #chatBgPreview
+                // 但为了简单，因为预览页没有其他 bubble，直接注入通常也没问题
+                // 这里做一个简单的处理，让用户输入的 .msg-row 能匹配到预览框里的结构
+                styleTag.innerHTML = css; 
+            } else {
+                // 兼容旧模式：如果只写了 color:red，就自动套在 .bubble 上
+                // 注意：为了让预览生效，我们需要同时覆盖 ai 和 me
+                styleTag.innerHTML = `
+                    #chatBgPreview .bubble { ${css} }
+                    #chatBgPreview .msg-row.ai .bubble { ${css} }
+                    #chatBgPreview .msg-row.me .bubble { ${css} }
+                `;
+            }
+        }
+        function openInputModal(t, cb) { 
+            // 核心修改：手动将输入弹窗的层级提高到 1500（原默认是1000），确保它在长期记忆弹窗之上
+            document.getElementById('modal-input-name').style.zIndex = '1500';
+
+            document.getElementById('inputModalTitle').innerText = t; 
+            document.getElementById('genericInput').value = ''; 
+            const old = document.getElementById('btnConfirmInput'); 
+            const n = old.cloneNode(true); 
+            old.parentNode.replaceChild(n, old); 
+            n.onclick = () => { 
+                cb(document.getElementById('genericInput').value); 
+                closeModal('modal-input-name'); 
+            }; 
+            openModal('modal-input-name'); 
+        }
+        function openModal(id) { document.getElementById(id).style.display='flex'; setTimeout(()=>document.getElementById(id).classList.add('show'),10); }
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); setTimeout(()=>document.getElementById(id).style.display='none',300); }
+        function showToast(msg, err) { const t=document.getElementById('toast'); t.innerText=msg; t.style.color=err?'red':'#333'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
+        // 监听开关变化
+document.getElementById('offlineModeSwitch').addEventListener('change', (e) => {
+    if (e.target.checked) {
+        // 开启时，显示人称行，并弹出选择框
+        document.getElementById('offlinePerspectiveRow').style.display = 'flex';
+        openPerspectiveModal();
+    } else {
+        // 关闭时，隐藏人称行
+        document.getElementById('offlinePerspectiveRow').style.display = 'none';
+    }
+});
+
+function openPerspectiveModal() {
+    // 默认选中第二人称
+    if (!currentChar.offlinePerspective) currentChar.offlinePerspective = '2nd';
+    
+    // 更新对勾显示
+    document.getElementById('mark-2nd').style.display = currentChar.offlinePerspective === '2nd' ? 'block' : 'none';
+    document.getElementById('mark-3rd').style.display = currentChar.offlinePerspective === '3rd' ? 'block' : 'none';
+    
+    openModal('modal-perspective');
+}
+
+function selectPerspective(type) {
+    currentChar.offlinePerspective = type;
+    const pMap = {'2nd': '第二人称', '3rd': '第三人称'};
+    document.getElementById('currentPerspectiveDisplay').innerText = pMap[type] + ' >';
+    closeModal('modal-perspective');
+}
+    </script>
+</body>
+</html>

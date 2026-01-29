@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Emoticon Panel</title>
+    <style>
+        * { 
+    box-sizing: border-box; 
+    -webkit-tap-highlight-color: transparent; 
+    outline: none; 
+    user-select: none; 
+    -webkit-user-select: none; /* 新增这一行，适配苹果和手机内核 */
+}
+        body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            background: #fff; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* 顶部操作栏 */
+        .top-bar {
+            height: 50px; display: flex; align-items: center; justify-content: space-between;
+            padding: 0 15px; border-bottom: 1px solid #f0f0f0; background: #fff; z-index: 10;
+        }
+        .top-btn { font-size: 14px; color: #333; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+        .top-btn:active { background: #f5f5f5; }
+        .top-btn.cancel { color: #999; }
+        .top-btn.primary { color: #007AFF; font-weight: 500; }
+
+        /* 搜索栏 (默认隐藏) */
+        .search-bar-wrap {
+            height: 0; overflow: hidden; transition: height 0.2s; background: #f9f9f9; padding: 0 15px;
+            display: flex; align-items: center;
+        }
+        .search-bar-wrap.active { height: 50px; border-bottom: 1px solid #eee; }
+        .search-input-box {
+            flex: 1; background: #fff; height: 32px; border-radius: 6px; display: flex; align-items: center; padding: 0 10px;
+        }
+        .search-input { border: none; width: 100%; font-size: 14px; color: #333; }
+        .close-search { width: 30px; height: 30px; display: flex; justify-content: center; align-items: center; color: #999; margin-left: 5px; cursor: pointer; }
+
+        /* 分类栏 */
+        .category-scroll {
+            height: 44px; display: flex; align-items: center; overflow-x: auto; white-space: nowrap;
+            padding: 0 10px; border-bottom: 1px solid #f0f0f0; background: #fff;
+        }
+        .category-scroll::-webkit-scrollbar { display: none; }
+        .cat-item {
+            padding: 6px 14px; margin-right: 8px; font-size: 13px; color: #666; border-radius: 15px; background: #f5f5f7;
+            position: relative; transition: all 0.2s;
+            -webkit-user-select: none; 
+    -webkit-touch-callout: none;
+    user-select: none;
+        }
+        .cat-item.active { background: #007AFF; color: #fff; font-weight: 500; }
+        .cat-close { 
+            position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; background: #FF3B30; color: #fff; 
+            border-radius: 50%; font-size: 10px; display: flex; justify-content: center; align-items: center;
+            border: 1px solid #fff; display: none; /* 默认不显示，只有在特定模式或者长按后才显示逻辑待定，这里直接做成点击X删除 */
+        }
+        .cat-item .del-btn {
+            display: inline-flex; width: 16px; height: 16px; margin-left: 6px; background: rgba(0,0,0,0.2); 
+            border-radius: 50%; justify-content: center; align-items: center; font-size: 10px; vertical-align: middle;
+        }
+
+        /* 表情内容区 */
+        .content-area {
+            flex: 1; overflow-y: auto; padding: 10px;
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+            align-content: start; transition: transform 0.2s;
+        }
+        /* 搜索框出现时，内容区稍微往下压一点的视觉效果 (其实不需要padding，因为Search是独立占位的) */
+        
+        .emo-item {
+            aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-radius: 8px; position: relative; cursor: pointer;
+        }
+        .emo-item:active { background: #f5f5f5; }
+        .emo-img { width: 80%; height: 70%; object-fit: contain; pointer-events: none; }
+        .emo-name { font-size: 10px; color: #888; margin-top: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+        
+        /* 选择模式相关 */
+        .select-circle {
+            position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border: 1px solid #ccc; border-radius: 50%; background: rgba(255,255,255,0.8);
+            display: none;
+        }
+        .selecting .select-circle { display: block; }
+        .emo-item.selected .select-circle { background: #FF3B30; border-color: #FF3B30; }
+
+        /* 底部选择操作栏 */
+        .bottom-action-bar {
+            height: 60px; background: #fff; border-top: 1px solid #eee; display: none; align-items: center; justify-content: space-around;
+            padding-bottom: 10px; /* 避开底部安全区 */
+        }
+        .bottom-action-bar.active { display: flex; }
+        .action-icon-btn { display: flex; flex-direction: column; align-items: center; color: #666; font-size: 10px; gap: 4px; }
+        .action-svg { width: 24px; height: 24px; }
+
+        /* 弹窗通用样式 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 100;
+            display: none; justify-content: center; align-items: center; backdrop-filter: blur(2px);
+        }
+        .modal-card {
+            background: #fff; width: 80%; border-radius: 16px; padding: 20px;
+            display: flex; flex-direction: column; gap: 15px; max-height: 80vh;
+        }
+        .modal-title { font-size: 17px; font-weight: 600; text-align: center; }
+        .modal-input { width: 100%; padding: 10px; background: #f2f2f6; border: none; border-radius: 8px; font-size: 15px; }
+        .modal-btns { display: flex; gap: 10px; margin-top: 10px; }
+        .m-btn { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 15px; font-weight: 500; cursor: pointer; }
+        .m-btn.cancel { background: #f5f5f7; color: #888; }
+        .m-btn.confirm { background: #007AFF; color: #fff; }
+        
+        /* 角色列表弹窗 */
+        .char-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: 300px; }
+        .char-row { display: flex; align-items: center; padding: 8px; border-radius: 8px; background: #f9f9fc; }
+        .char-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; margin-right: 10px; background: #ddd; }
+        .char-name { flex: 1; font-size: 14px; color: #333; }
+        .char-check { width: 20px; height: 20px; border: 1px solid #ccc; border-radius: 50%; }
+        .char-row.selected .char-check { background: #34C759; border-color: #34C759; }
+
+        /* 分类列表弹窗 (用于管理和移动) */
+        .cat-list-modal { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 250px; }
+        .cat-row-modal { padding: 12px; background: #f5f5f7; border-radius: 8px; text-align: center; color: #333; }
+        .cat-row-modal:active { background: #e5e5ea; }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+</head>
+<body>
+
+    <!-- 顶部功能栏 -->
+    <div class="top-bar">
+        <div class="top-btn cancel" onclick="closePanel()">取消</div>
+        <div style="display:flex; gap:5px;">
+            <div class="top-btn" onclick="toggleSearch()">搜索</div>
+            <div class="top-btn" onclick="openCatManager()">分类</div>
+            <div class="top-btn" onclick="toggleSelectMode()">选择</div>
+            <div class="top-btn primary" onclick="openImportModal()">导入</div>
+        </div>
+    </div>
+
+    <!-- 搜索框 -->
+    <div class="search-bar-wrap" id="searchBar">
+        <div class="search-input-box">
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索表情包..." oninput="handleSearch()">
+        </div>
+        <div class="close-search" onclick="toggleSearch()">×</div>
+    </div>
+
+    <!-- 分类Tab -->
+    <div class="category-scroll" id="catScroll">
+        <!-- JS生成 -->
+    </div>
+
+    <!-- 表情列表 -->
+    <div class="content-area" id="emoGrid">
+        <!-- JS生成 -->
+    </div>
+
+    <!-- 底部选择操作栏 -->
+    <div class="bottom-action-bar" id="selectActionBar">
+        <div class="action-icon-btn" onclick="handleSelectAll()">
+            <div style="font-size:16px;">☑</div>
+            <div>全选</div>
+        </div>
+        <div class="action-icon-btn" onclick="openMoveModal()">
+            <div style="font-size:16px;">➜</div>
+            <div>移动</div>
+        </div>
+        <div class="action-icon-btn" onclick="handleDeleteSelected()">
+            <div style="font-size:16px; color:#FF3B30;">🗑</div>
+            <div style="color:#FF3B30;">删除</div>
+        </div>
+    </div>
+
+    <!-- 1. 分类管理弹窗 -->
+    <div class="modal-overlay" id="catManagerModal">
+        <div class="modal-card">
+            <div class="modal-title">添加分类</div>
+            <input type="text" class="modal-input" id="newCatName" placeholder="输入分类名称">
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="closeModal('catManagerModal')">取消</button>
+                <button class="m-btn confirm" onclick="addNewCategory()">添加</button>
+            </div>
+            <div style="font-size:12px; color:#999; text-align:center; margin-top:5px;">(点击顶部Tab上的小叉号删除分类)</div>
+        </div>
+    </div>
+
+    <!-- 2. 导入弹窗 -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal-card">
+            <div class="modal-title">导入表情包</div>
+            <div class="modal-btns" style="flex-direction:column;">
+                <button class="m-btn confirm" onclick="importFromPaste()">粘贴文本 (URL列表)</button>
+                <button class="m-btn confirm" onclick="importFromPhoto()">照片图库 (模拟)</button>
+                <button class="m-btn confirm" onclick="document.getElementById('fileInput').click()">文件 (.txt/.json)</button>
+                <button class="m-btn cancel" onclick="closeModal('importModal')">取消</button>
+            </div>
+            <input type="file" id="fileInput" style="display:none" accept=".txt,.json,.docx" onchange="handleFileImport(this)">
+        </div>
+    </div>
+
+    <!-- 3. 粘贴文本输入弹窗 -->
+    <div class="modal-overlay" id="pasteInputModal">
+        <div class="modal-card">
+            <div class="modal-title">粘贴文本</div>
+            <textarea class="modal-input" id="pasteArea" rows="5" placeholder="格式：名称URL (一行一个)"></textarea>
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="closeModal('pasteInputModal')">取消</button>
+                <button class="m-btn confirm" onclick="processPasteImport()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 照片导入命名弹窗 -->
+    <div class="modal-overlay" id="photoNameModal">
+        <div class="modal-card">
+            <div class="modal-title">表情包命名</div>
+            <input type="text" class="modal-input" id="photoNameInput" placeholder="给这个表情起个名字">
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="closeModal('photoNameModal')">取消</button>
+                <button class="m-btn confirm" onclick="confirmPhotoImport()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. 绑定角色弹窗 -->
+    <div class="modal-overlay" id="bindCharModal">
+        <div class="modal-card">
+            <div class="modal-title">绑定角色</div>
+            <div style="font-size:12px; color:#999; text-align:center;">选中角色将可以使用 "<span id="bindCatName"></span>" 中的表情包</div>
+            <div class="char-list" id="charListContainer"></div>
+            <div class="modal-btns">
+                <button class="m-btn cancel" onclick="closeModal('bindCharModal')">取消</button>
+                <button class="m-btn confirm" onclick="saveCharBinding()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. 移动分类弹窗 -->
+    <div class="modal-overlay" id="moveCatModal">
+        <div class="modal-card">
+            <div class="modal-title">移动到...</div>
+            <div class="cat-list-modal" id="moveCatList"></div>
+            <button class="m-btn cancel full-width" onclick="closeModal('moveCatModal')">取消</button>
+        </div>
+    </div>
+
+
+    <script>
+        let dbPromise;
+function initDB() {
+    if (!dbPromise) {
+        dbPromise = idb.openDB('QQ_DB_2026', 1, {
+            upgrade(db) {
+                if (!db.objectStoreNames.contains('keyval')) {
+                    db.createObjectStore('keyval');
+                }
+            },
+        });
+    }
+    return dbPromise;
+}
+async function dbGet(key) {
+    const db = await initDB();
+    return await db.get('keyval', key);
+}
+async function dbSet(key, val) {
+    const db = await initDB();
+    return await db.put('keyval', val, key);
+}
+        const DB_KEY = 'qq_emoticon_db';
+        const CHAR_DB_KEY = 'qq_app_data_pro_max_final';
+        
+        // 数据结构示例
+        let db = {
+            categories: [
+                { id: 'all', name: '全部', items: [] }, // 虚拟分类，不存储items，实时计算
+                { id: 'uncategorized', name: '未分类', items: [] }
+            ],
+            bindings: {} // charId -> [catId1, catId2]
+        };
+
+        let currentCatId = 'all';
+        let isSelectMode = false;
+        let selectedIndices = new Set(); // 存储当前分类下被选中的 item index
+        let longPressTimer = null;
+        let tempPhotoUrl = ''; // 暂存图片导入的URL
+        let tempBindCatId = ''; // 暂存正在绑定的分类ID
+
+        // 初始化
+        window.onload = async function() {
+            await loadData();
+            renderCategories();
+            renderEmoticons();
+
+            window.addEventListener('message', function(e) {
+    if(e.data.action === 'refresh') {
+        // 必须等待 loadData 读取完，再执行渲染
+        loadData().then(() => {
+            renderCategories(); 
+            renderEmoticons();
+        });
+    }
+});
+        };
+
+        async function loadData() {
+            // 读取数据，因为 chat_window 读取时假设它是字符串，所以我们存取都要保持字符串格式
+            let loaded = await dbGet(DB_KEY); 
+            
+            if (loaded) { 
+                // 如果读取到的是字符串（为了兼容 chat_window），则解析它
+                if (typeof loaded === 'string') {
+                    try { loaded = JSON.parse(loaded); } catch(e) { loaded = null; }
+                }
+                
+                if (loaded) {
+                    if (!loaded.categories.find(c => c.id === 'uncategorized')) {
+                        loaded.categories.unshift({ id: 'uncategorized', name: '未分类', items: [] });
+                    }
+                    db.categories = loaded.categories.filter(c => c.id !== 'all'); 
+                    db.bindings = loaded.bindings || {};
+                } else {
+                    db.categories = [{ id: 'uncategorized', name: '未分类', items: [] }];
+                }
+            } else {
+                // 初始化
+                db.categories = [{ id: 'uncategorized', name: '未分类', items: [] }];
+            }
+        }
+
+        async function saveData() {
+            const toSave = {
+                categories: db.categories,
+                bindings: db.bindings
+            };
+            // 必须存为字符串，否则 chat_window 读取时会报错
+            await dbSet(DB_KEY, JSON.stringify(toSave)); 
+        }
+
+        function closePanel() {
+            window.parent.postMessage({ action: 'closeEmoticon' }, '*');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // --- 核心渲染逻辑 ---
+
+        function renderCategories() {
+            const container = document.getElementById('catScroll');
+            container.innerHTML = '';
+
+            // 1. 渲染 "全部"
+            const allBtn = createCatEl({ id: 'all', name: '全部' }, false);
+            container.appendChild(allBtn);
+
+            // 2. 渲染其他
+            db.categories.forEach(cat => {
+                const el = createCatEl(cat, true);
+                container.appendChild(el);
+            });
+        }
+
+        function createCatEl(cat, canDelete) {
+            const div = document.createElement('div');
+            div.className = `cat-item ${currentCatId === cat.id ? 'active' : ''}`;
+            div.innerText = cat.name;
+            div.oncontextmenu = (e) => { e.preventDefault(); return false; }; 
+            div.style.webkitTouchCallout = "none";
+            div.style.userSelect = "none"; 
+
+            // 点击切换
+            div.onclick = () => {
+                currentCatId = cat.id;
+                isSelectMode = false;
+                renderCategories();
+                renderEmoticons();
+                toggleSelectMode(false); // 切换分类自动退出选择模式
+            };
+
+            // 长按绑定
+            div.ontouchstart = (e) => {
+                longPressTimer = setTimeout(() => {
+                    openBindCharModal(cat.id, cat.name);
+                }, 800);
+            };
+            div.ontouchmove = () => clearTimeout(longPressTimer);
+            div.ontouchend = () => clearTimeout(longPressTimer);
+
+            // 删除按钮 (未分类不可删)
+            if (canDelete && cat.id !== 'uncategorized') {
+                const del = document.createElement('span');
+                del.className = 'del-btn';
+                del.innerHTML = '×';
+                del.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteCategory(cat.id);
+                };
+                div.appendChild(del);
+            }
+
+            return div;
+        }
+
+        function getItemsForCurrentCat() {
+            if (currentCatId === 'all') {
+                // 聚合所有 items
+                let all = [];
+                db.categories.forEach(c => all = all.concat(c.items));
+                return all;
+            } else {
+                const cat = db.categories.find(c => c.id === currentCatId);
+                return cat ? cat.items : [];
+            }
+        }
+
+        function renderEmoticons() {
+            const grid = document.getElementById('emoGrid');
+            grid.innerHTML = '';
+            
+            let items = getItemsForCurrentCat();
+
+            // 搜索过滤
+            const searchKw = document.getElementById('searchInput').value.trim();
+            if (searchKw) {
+                items = items.filter(i => i.name.includes(searchKw));
+            }
+
+            items.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = `emo-item ${isSelectMode ? 'selecting' : ''} ${selectedIndices.has(index) ? 'selected' : ''}`;
+                div.innerHTML = `
+                    <img src="${item.url}" class="emo-img" onerror="this.src='https://via.placeholder.com/100x100?text=Error'">
+                    <div class="emo-name">${item.name}</div>
+                    <div class="select-circle"></div>
+                `;
+
+                div.onclick = () => {
+                    if (isSelectMode) {
+                        if (selectedIndices.has(index)) selectedIndices.delete(index);
+                        else selectedIndices.add(index);
+                        renderEmoticons(); // 刷新选中状态
+                    } else {
+                        // 发送表情包
+                        window.parent.postMessage({ action: 'sendEmoticon', url: item.url, name: item.name }, '*');
+                    }
+                };
+
+                grid.appendChild(div);
+            });
+        }
+
+        // --- 功能逻辑 ---
+
+        // 搜索
+        function toggleSearch() {
+            const bar = document.getElementById('searchBar');
+            bar.classList.toggle('active');
+            if (bar.classList.contains('active')) {
+                document.getElementById('searchInput').focus();
+            } else {
+                document.getElementById('searchInput').value = '';
+                renderEmoticons();
+            }
+        }
+        function handleSearch() {
+            renderEmoticons();
+        }
+
+        // 分类管理
+        function openCatManager() {
+            document.getElementById('newCatName').value = '';
+            document.getElementById('catManagerModal').style.display = 'flex';
+        }
+        function addNewCategory() {
+            const name = document.getElementById('newCatName').value.trim();
+            if (name) {
+                const id = 'cat_' + Date.now();
+                db.categories.push({ id: id, name: name, items: [] });
+                saveData();
+                renderCategories();
+            }
+            closeModal('catManagerModal');
+        }
+        function deleteCategory(catId) {
+            if (!confirm('确定删除此分类吗？分类内的表情包将移至“未分类”。')) return;
+            
+            const catIndex = db.categories.findIndex(c => c.id === catId);
+            if (catIndex > -1) {
+                const itemsToMove = db.categories[catIndex].items;
+                const uncat = db.categories.find(c => c.id === 'uncategorized');
+                if (uncat) {
+                    uncat.items = uncat.items.concat(itemsToMove);
+                }
+                db.categories.splice(catIndex, 1);
+                
+                if (currentCatId === catId) currentCatId = 'all';
+                saveData();
+                renderCategories();
+                renderEmoticons();
+            }
+        }
+
+        // 绑定角色逻辑
+        async function openBindCharModal(catId, catName) {
+            if (catId === 'all') return; // “全部”不能绑定
+            tempBindCatId = catId;
+            document.getElementById('bindCatName').innerText = catName;
+            
+            // 读取父级 localStorage 的角色数据
+            const rawChars = await dbGet(CHAR_DB_KEY);
+            const chars = rawChars ? JSON.parse(rawChars) : [];
+            const container = document.getElementById('charListContainer');
+            container.innerHTML = '';
+
+            chars.forEach(char => {
+                const row = document.createElement('div');
+                // 检查是否已绑定
+                const boundCats = db.bindings[char.id] || [];
+                const isBound = boundCats.includes(catId);
+                
+                row.className = `char-row ${isBound ? 'selected' : ''}`;
+                row.innerHTML = `
+                    <img src="${char.avatar}" class="char-avatar">
+                    <div class="char-name">${char.name} <span style="color:#999;font-size:12px;">(${char.userNickName || '无备注'})</span></div>
+                    <div class="char-check"></div>
+                `;
+                
+                row.onclick = () => {
+                    row.classList.toggle('selected');
+                };
+                
+                // 附加数据方便保存时读取
+                row.dataset.charId = char.id;
+                container.appendChild(row);
+            });
+
+            document.getElementById('bindCharModal').style.display = 'flex';
+        }
+
+        function saveCharBinding() {
+            const rows = document.querySelectorAll('.char-row');
+            rows.forEach(row => {
+                const charId = row.dataset.charId;
+                const isSelected = row.classList.contains('selected');
+                
+                if (!db.bindings[charId]) db.bindings[charId] = [];
+                
+                if (isSelected) {
+                    if (!db.bindings[charId].includes(tempBindCatId)) {
+                        db.bindings[charId].push(tempBindCatId);
+                    }
+                } else {
+                    db.bindings[charId] = db.bindings[charId].filter(id => id !== tempBindCatId);
+                }
+            });
+            saveData();
+            closeModal('bindCharModal');
+        }
+
+        // 选择模式逻辑
+        function toggleSelectMode(forceState) {
+            if (typeof forceState !== 'undefined') isSelectMode = forceState;
+            else isSelectMode = !isSelectMode;
+
+            selectedIndices.clear();
+            const bar = document.getElementById('selectActionBar');
+            
+            if (isSelectMode) {
+                bar.classList.add('active');
+            } else {
+                bar.classList.remove('active');
+            }
+            renderEmoticons();
+        }
+        
+        function handleSelectAll() {
+            const items = getItemsForCurrentCat();
+            if (selectedIndices.size === items.length) {
+                selectedIndices.clear();
+            } else {
+                items.forEach((_, idx) => selectedIndices.add(idx));
+            }
+            renderEmoticons();
+        }
+
+        function handleDeleteSelected() {
+            if (selectedIndices.size === 0) return;
+            if (!confirm('确定删除选中表情包？')) return;
+
+            const items = getItemsForCurrentCat(); // 当前视图的items
+            // 注意：如果是 'all' 视图，删除比较麻烦，因为需要知道原 item 属于哪个分类
+            // 简单处理：如果是 'all'，我们需要在渲染 items 时记录它所属的分类ID和该分类下的index
+            // 为了简化，这里只实现：非 'all' 模式下的删除。如果是 'all' 模式，提示用户去具体分类删除。
+            
+            if (currentCatId === 'all') {
+                alert('请进入具体分类（如“未分类”）进行批量删除操作。');
+                return;
+            }
+
+            const cat = db.categories.find(c => c.id === currentCatId);
+            // 倒序删除防止索引错位
+            const sortedIndices = Array.from(selectedIndices).sort((a, b) => b - a);
+            sortedIndices.forEach(idx => {
+                cat.items.splice(idx, 1);
+            });
+
+            selectedIndices.clear();
+            saveData();
+            renderEmoticons();
+        }
+
+        function openMoveModal() {
+            if (selectedIndices.size === 0) return;
+            if (currentCatId === 'all') {
+                 alert('请进入具体分类进行批量移动操作。');
+                 return;
+            }
+
+            const list = document.getElementById('moveCatList');
+            list.innerHTML = '';
+            
+            // 显示除了 'all' 以外的所有分类
+            db.categories.forEach(cat => {
+                const div = document.createElement('div');
+                div.className = 'cat-row-modal';
+                div.innerText = cat.name;
+                div.onclick = () => moveSelectedTo(cat.id);
+                list.appendChild(div);
+            });
+            
+            document.getElementById('moveCatModal').style.display = 'flex';
+        }
+
+        function moveSelectedTo(targetCatId) {
+            const sourceCat = db.categories.find(c => c.id === currentCatId);
+            const targetCat = db.categories.find(c => c.id === targetCatId);
+            
+            const sortedIndices = Array.from(selectedIndices).sort((a, b) => b - a);
+            sortedIndices.forEach(idx => {
+                const item = sourceCat.items[idx];
+                targetCat.items.push(item); // 移动
+                sourceCat.items.splice(idx, 1); // 删除源
+            });
+            
+            selectedIndices.clear();
+            saveData();
+            closeModal('moveCatModal');
+            renderEmoticons();
+        }
+
+
+        // --- 导入逻辑 ---
+        function openImportModal() {
+            document.getElementById('importModal').style.display = 'flex';
+        }
+
+        function importFromPaste() {
+            closeModal('importModal');
+            document.getElementById('pasteArea').value = '';
+            document.getElementById('pasteInputModal').style.display = 'flex';
+        }
+        
+        function processPasteImport() {
+            const text = document.getElementById('pasteArea').value;
+            const lines = text.split('\n');
+            let count = 0;
+            const uncat = db.categories.find(c => c.id === 'uncategorized');
+            
+            lines.forEach(line => {
+                line = line.trim();
+                if (!line) return;
+                // 简单尝试分离 URL (假设 http 开头)
+                const urlIdx = line.indexOf('http');
+                if (urlIdx !== -1) {
+                    const name = line.substring(0, urlIdx).trim() || '未命名';
+                    const url = line.substring(urlIdx).trim();
+                    uncat.items.push({ name: name, url: url });
+                    count++;
+                }
+            });
+            
+            if (count > 0) {
+                saveData();
+                renderEmoticons();
+                alert(`已导入 ${count} 个表情到“未分类”`);
+            }
+            closeModal('pasteInputModal');
+        }
+
+        function importFromPhoto() {
+            closeModal('importModal');
+            // 模拟相册选择，这里用随机图代替，实际中无法直接访问手机相册除非 input type=file
+            // 这里为了演示流程，我们弹出一个 input type=file，但实际上是让用户传图片
+            // 为了符合你的描述 "照片图库 -> 弹窗输入名字"，我们先让用户选图
+            document.getElementById('fileInput').click();
+        }
+
+        function handleFileImport(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            // 如果是文件 (json/txt)
+            if (file.name.endsWith('.json') || file.name.endsWith('.txt')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    // 简单的尝试解析
+                    try {
+                        // 假设是 JSON 数组 [{name, url}]
+                        const list = JSON.parse(e.target.result);
+                        const uncat = db.categories.find(c => c.id === 'uncategorized');
+                        if (Array.isArray(list)) {
+                            list.forEach(i => { if(i.url) uncat.items.push(i); });
+                            saveData(); renderEmoticons();
+                            alert('导入成功');
+                        }
+                    } catch(err) {
+                        alert('文件格式错误');
+                    }
+                };
+                reader.readAsText(file);
+                closeModal('importModal');
+                return;
+            }
+
+            // 如果是图片 (blob)
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                tempPhotoUrl = e.target.result; // Base64，可能很大
+                // 弹出命名框
+                document.getElementById('photoNameInput').value = '';
+                closeModal('importModal'); // 确保关闭
+                document.getElementById('photoNameModal').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function confirmPhotoImport() {
+            const name = document.getElementById('photoNameInput').value.trim() || '图片表情';
+            const uncat = db.categories.find(c => c.id === 'uncategorized');
+            uncat.items.push({ name: name, url: tempPhotoUrl });
+            saveData();
+            renderEmoticons();
+            closeModal('photoNameModal');
+        }
+
+    </script>
+</body>
+</html>

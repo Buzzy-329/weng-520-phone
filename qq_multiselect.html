@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Multi Select Bar</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: rgba(245, 245, 247, 0.98);
+            border-bottom: 1px solid rgba(0,0,0,0.1); /* 这条线现在会显得很直 */
+            
+            display: flex; 
+            flex-direction: column;
+            /* 
+               1. 顶部避让：54px (避开灵动岛/刘海，同时不至于压太低)
+               2. 底部留白：确保按钮不会贴在底边线上，视觉上就是“水平”的
+            */
+            padding-top: 54px; 
+            padding-bottom: 2px; /* 底部微调 */
+            
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+        }
+        
+        /* 按钮容器：强制水平排列，垂直居中 */
+        .action-row {
+            flex: 1; /* 占满剩余空间 */
+            display: flex; 
+            align-items: center; /* 垂直居中，确保都在一条水平线上 */
+            justify-content: space-between; /* 两端对齐，中间自动分配 */
+            padding: 0 15px; /* 左右留一点边距，不贴边 */
+        }
+        
+        .action-item {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 3px; 
+            cursor: pointer; width: 48px; /* 固定宽度，防止歪斜 */
+            opacity: 1; transition: opacity 0.2s;
+        }
+        .action-item:active { opacity: 0.5; }
+        
+        .icon-box {
+            width: 32px; height: 32px; 
+            background: #fff; border-radius: 8px;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06); /* 阴影改淡一点，看起来更平 */
+        }
+        
+        .action-label { font-size: 10px; color: #666; font-weight: 500; line-height: 1.2; }
+        
+        svg { width: 18px; height: 18px; stroke: #333; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+</head>
+<body>
+
+    <div class="action-row">
+        <!-- 转发 -->
+        <div class="action-item" onclick="send('forward')">
+            <div class="icon-box">
+                <svg viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+            </div>
+            <div class="action-label">转发</div>
+        </div>
+        
+        <!-- 收藏 -->
+        <div class="action-item" onclick="send('collect')">
+            <div class="icon-box">
+                <svg viewBox="0 0 24 24" style="stroke:#FF6B81;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            </div>
+            <div class="action-label">收藏</div>
+        </div>
+
+        <!-- 截图 -->
+        <div class="action-item" onclick="send('screenshot')">
+            <div class="icon-box">
+                <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            </div>
+            <div class="action-label">截图</div>
+        </div>
+        
+        <!-- 删除 -->
+        <div class="action-item" onclick="send('delete')">
+            <div class="icon-box">
+                <svg viewBox="0 0 24 24" style="stroke:#FF3B30;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </div>
+            <div class="action-label" style="color:#FF3B30">删除</div>
+        </div>
+
+        <!-- 取消 -->
+        <div class="action-item" onclick="send('cancel')">
+            <div class="icon-box">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </div>
+            <div class="action-label">取消</div>
+        </div>
+    </div>
+
+    <script>
+        function send(action) {
+            if (window.parent && window.parent.handleMultiAction) {
+                window.parent.handleMultiAction(action);
+            }
+        }
+    </script>
+</body>
+</html>

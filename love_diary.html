@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Love Diary</title>
+    <style>
+        /* --- 基础设定 --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background: linear-gradient(180deg, #fff0f5 0%, #ffe4e1 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Comic Sans MS", cursive, sans-serif;
+            color: #5d5d5d;
+            display: flex; flex-direction: column;
+            overflow: hidden; /* 防止body整体滚动 */
+        }
+
+        /* --- 顶部导航 --- */
+        .nav-bar {
+            padding: 50px 24px 20px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 10;
+            flex-shrink: 0; /* 防止被挤压 */
+        }
+        .back-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; box-shadow: 0 4px 12px rgba(255, 182, 193, 0.2);
+            font-size: 18px; color: #888; border: none;
+        }
+        .page-title {
+            font-size: 18px; font-weight: 600; letter-spacing: 0.5px; color: #7a6a6a;
+        }
+        .right-actions { display: flex; gap: 10px; }
+        .action-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            font-size: 20px; color: #ffb7b2; border: none;
+        }
+        .pencil-icon { font-size: 18px; }
+
+        /* --- 内容滚动区 (核心修复位置) --- */
+        .diary-scroll-area {
+            flex: 1; /* 占据剩余空间 */
+            overflow-y: auto; /* 允许垂直滚动 */
+            padding: 10px 20px 40px 20px;
+            display: flex; flex-direction: column; gap: 25px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch; /* iOS 流畅滚动 */
+        }
+        .diary-scroll-area::-webkit-scrollbar { display: none; }
+
+        /* --- 日记信纸卡片 --- */
+        .diary-card {
+            width: 100%; min-height: 300px;
+            padding: 25px;
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            transition: transform 0.2s, opacity 0.2s;
+            overflow: hidden;
+            font-size: 15px; line-height: 1.8; color: #444;
+            display: flex; flex-direction: column;
+            flex-shrink: 0; /* 防止卡片被挤压 */
+        }
+        
+        /* 信纸样式 (Paper Styles) */
+        .paper-grid {
+            background-color: #fff;
+            background-image: linear-gradient(#e0e0e0 1px, transparent 1px), linear-gradient(90deg, #e0e0e0 1px, transparent 1px);
+            background-size: 20px 20px;
+            border-radius: 4px; border: 1px solid #ddd;
+        }
+        .paper-line {
+            background-color: #fffbf0;
+            background-image: repeating-linear-gradient(#fffbf0 0px, #fffbf0 24px, #a8d8ea 25px);
+            border-radius: 8px; box-shadow: 5px 5px 0px rgba(0,0,0,0.1);
+        }
+        .paper-pink {
+            background-color: #fff0f5;
+            background-image: radial-gradient(#ffb7b2 15%, transparent 16%);
+            background-size: 30px 30px;
+            border-radius: 20px;
+        }
+        .paper-craft {
+            background-color: #f4e1d2;
+            border-radius: 2px;
+            border-left: 6px solid #d7bfa6;
+        }
+        .paper-dots {
+            background-color: #ffffff;
+            background-image: radial-gradient(#ccc 1px, transparent 1px);
+            background-size: 15px 15px;
+            border-radius: 12px; border: 2px dashed #ddd;
+        }
+
+        /* 字体特效 (Text Effects) */
+        .fx-bold { font-weight: 800; color: #333; }
+        .fx-strike { text-decoration: line-through; color: #999; }
+        .fx-big { font-size: 1.3em; display: inline-block; transform: rotate(-2deg); }
+        .fx-small { font-size: 0.8em; color: #888; }
+        .fx-color { color: #ff6b81; font-weight: bold; }
+        .fx-messy { font-family: "Courier New", monospace; letter-spacing: -1px; transform: skewX(-10deg); display: inline-block; }
+        .fx-marker { background: linear-gradient(180deg, transparent 60%, #fffd82 60%); }
+
+        /* 用户日记标题样式 */
+        .diary-user-title {
+            font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #333;
+            border-bottom: 2px dashed rgba(0,0,0,0.1); padding-bottom: 5px;
+        }
+
+        /* 卡片底部栏 */
+        .card-footer {
+            margin-top: auto; /* 推到底部 */
+            padding-top: 15px;
+            border-top: 1px solid rgba(0,0,0,0.05);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .footer-left { display: flex; gap: 15px; align-items: center; }
+        .icon-btn { font-size: 20px; cursor: pointer; transition: transform 0.2s; display: flex; align-items: center; gap: 4px;}
+        .icon-btn:active { transform: scale(1.2); }
+        .liked { color: #ff6b81; }
+        .collected { color: #ffd700; }
+        .date-tag { font-size: 12px; color: #999; font-family: monospace; }
+
+        /* 评论区 */
+        .comments-section {
+            margin-top: 15px; background: rgba(255,255,255,0.4);
+            border-radius: 12px; padding: 10px; font-size: 13px;
+        }
+        .comment-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: flex-start; }
+        .c-name { font-weight: bold; color: #555; white-space: nowrap; }
+        .c-content { color: #666; word-break: break-all; }
+        .input-comment-box { display: flex; gap: 8px; margin-top: 10px; }
+        .c-input { flex: 1; border: none; background: rgba(255,255,255,0.8); padding: 6px 10px; border-radius: 15px; font-size: 12px; }
+        .c-send { border: none; background: #ffb7b2; color: #fff; padding: 0 12px; border-radius: 15px; font-size: 12px; font-weight: bold; }
+
+        /* --- 弹窗 (通用) --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); backdrop-filter: blur(5px);
+            z-index: 200; display: none; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .modal-card {
+            width: 85%; max-width: 340px; background: #fff; border-radius: 24px; padding: 25px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+            transform: scale(0.9); transition: transform 0.3s; display: flex; flex-direction: column; gap: 10px;
+        }
+        .modal-overlay.show { opacity: 1; }
+        .modal-overlay.show .modal-card { transform: scale(1); }
+        
+        /* 写日记弹窗样式 */
+        .write-header { text-align:center; font-weight:bold; color:#ffb7b2; margin-bottom: 5px; }
+        .diary-input-line {
+            width: 100%; padding: 10px; border: 1px solid #eee; background: #f9f9f9;
+            border-radius: 12px; font-size: 14px; color: #444;
+        }
+        .diary-input-area {
+            width: 100%; height: 150px; border: 1px solid #eee; background: #f9f9f9;
+            padding: 10px; border-radius: 12px; 
+            font-size: 14px; line-height: 1.5; resize: none;
+            font-family: inherit; color: #444;
+        }
+        
+        /* 按钮组 */
+        .btn-row { display: flex; gap: 10px; margin-top: 5px; }
+        .m-btn { flex: 1; padding: 12px; border-radius: 14px; border: none; font-weight: 600; font-size: 14px; }
+        .btn-gray { background: #f0f0f0; color: #888; }
+        .btn-pink { background: #ffb7b2; color: #fff; }
+
+        /* Loading */
+        .loading-spinner {
+            border: 3px solid rgba(255, 183, 178, 0.3); border-top: 3px solid #ffb7b2;
+            border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; margin: 0 auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .empty-tip { text-align: center; color: #aaa; margin-top: 100px; font-size: 14px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <button class="back-btn" onclick="goBack()">←</button>
+        <div class="page-title">甜蜜日记</div>
+        <div class="right-actions">
+            <!-- 铅笔按钮：用户写日记 -->
+            <button class="action-btn" onclick="openWriteModal()">
+                <span class="pencil-icon">✎</span>
+            </button>
+            <!-- 加号按钮：角色写日记 -->
+            <button class="action-btn" onclick="triggerAiDiary()">+</button>
+        </div>
+    </div>
+
+    <div class="diary-scroll-area" id="diaryContainer">
+        <!-- 日记卡片将插入这里 -->
+    </div>
+
+    <!-- 用户写日记弹窗 -->
+    <div class="modal-overlay" id="writeModal">
+        <div class="modal-card" style="box-shadow: 0 0 25px rgba(255, 182, 193, 0.6);">
+            <div class="write-header">写一篇日记</div>
+            <input type="text" class="diary-input-line" id="diaryTitleInput" placeholder="标题 (例如: 今天好开心)">
+            <input type="date" class="diary-input-line" id="diaryDateInput">
+            <textarea class="diary-input-area" id="diaryBodyInput" placeholder="正文内容..."></textarea>
+            <div class="btn-row">
+                <button class="m-btn btn-gray" onclick="closeWriteModal()">取消</button>
+                <button class="m-btn btn-pink" onclick="publishUserDiary()">完成发布</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 正在生成弹窗 -->
+    <div class="modal-overlay" id="loadingModal" style="pointer-events:none;">
+        <div class="modal-card" style="align-items:center; padding: 40px; justify-content:center;">
+            <div class="loading-spinner"></div>
+            <div style="margin-top:15px; color:#999; font-size:14px;" id="loadingText">对方正在写日记...</div>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal-card">
+            <div style="text-align:center; font-weight:bold; color:#ff6b6b; margin-bottom:10px;">撕掉这页日记？</div>
+            <div style="text-align:center; color:#888; font-size:13px; margin-bottom:20px;">删除后不可恢复（收藏的内容除外）。</div>
+            <div class="btn-row">
+                <button class="m-btn btn-gray" onclick="closeDeleteModal()">保留</button>
+                <button class="m-btn btn-pink" style="background:#ff6b6b;" onclick="confirmDelete()">狠心撕掉</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 核心：数据库连接工具 ---
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+        // --- 核心逻辑区 ---
+        const DB_KEY = 'qq_app_data_pro_max_final';
+        const DIARY_KEY = 'love_diary_data';
+        const COLLECT_KEY = 'qq_collect_data';
+        
+        let charId = null;
+        let currentChar = null;
+        let diaries = [];
+        let deleteTargetId = null;
+
+        // 样式库
+        const paperStyles = ['paper-grid', 'paper-line', 'paper-pink', 'paper-craft', 'paper-dots'];
+
+        window.onload = async function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            charId = urlParams.get('id');
+            
+            if(!charId) {
+                alert("未找到角色ID");
+                history.back();
+                return;
+            }
+
+            await loadData();
+            renderDiaries();
+        };
+
+        async function loadData() {
+            try {
+                // 1. 读取角色列表 (包含聊天记录 history)
+                const rawChars = await dbGet(DB_KEY);
+                const allChars = (typeof rawChars === 'string') ? JSON.parse(rawChars) : (rawChars || []);
+                currentChar = allChars.find(c => c.id === charId);
+                
+                if (currentChar) {
+                    // 2. --- 新增：读取并拼接世界书内容 ---
+                    let wbText = "";
+                    let activeBookIds = currentChar.worldBookIds || [];
+                    // 兼容旧数据的单选字段
+                    if (currentChar.worldBookId && !activeBookIds.includes(currentChar.worldBookId)) {
+                        activeBookIds.push(currentChar.worldBookId);
+                    }
+                    
+                    if (activeBookIds.length > 0) {
+                        const rawBooks = await dbGet('wb_books'); // 读取世界书库
+                        if (rawBooks) {
+                            const allBooks = (typeof rawBooks === 'string') ? JSON.parse(rawBooks) : rawBooks;
+                            wbText = allBooks
+                                .filter(b => activeBookIds.includes(b.id))
+                                .map(b => `[世界设定:${b.name}]\n${b.content}`)
+                                .join("\n\n");
+                        }
+                    }
+                    // 将处理好的世界书暂存到当前角色对象上，方便后续调用
+                    currentChar.cachedWorldInfo = wbText;
+                }
+
+                // 3. 读取日记数据
+                const rawDiaries = await dbGet(DIARY_KEY);
+                const allDiaries = (typeof rawDiaries === 'string') ? JSON.parse(rawDiaries) : (rawDiaries || {});
+                diaries = allDiaries[charId] || [];
+                
+            } catch (e) {
+                console.error("数据加载失败:", e);
+            }
+        }
+        
+        async function saveData() {
+            const rawDiaries = await dbGet(DIARY_KEY);
+            const allDiaries = (typeof rawDiaries === 'string') ? JSON.parse(rawDiaries) : (rawDiaries || {});
+            
+            allDiaries[charId] = diaries;
+            
+            // 存入 QQ_DB_V3，保持 JSON 字符串格式以统一规范
+            await dbSet(DIARY_KEY, JSON.stringify(allDiaries));
+        }
+
+        function goBack() {
+            window.location.href = `love.html?id=${charId}`;
+        }
+
+        // --- 渲染逻辑 (正序：最早在最上面，最新在最下面) ---
+        function renderDiaries() {
+            const container = document.getElementById('diaryContainer');
+            container.innerHTML = '';
+
+            if (diaries.length === 0) {
+                container.innerHTML = '<div class="empty-tip">还没有日记哦，点右上角让Ta写一篇吧~</div>';
+                return;
+            }
+
+            // 直接遍历，不倒序。数组最后的（最新的）会渲染在页面底部。
+            [...diaries].reverse().forEach(diary => {
+                const card = document.createElement('div');
+                card.className = `diary-card ${diary.paperStyle}`;
+                
+                // 处理右滑删除手势
+                handleSwipe(card, diary.id);
+
+                // 内容
+                let html = `<div style="margin-bottom:10px; font-size:12px; color:rgba(0,0,0,0.5);">${diary.authorName} · ${diary.date}</div>`;
+                html += `<div>${diary.content}</div>`;
+                
+                // 底部栏 (点赞、收藏)
+                html += `
+                    <div class="card-footer">
+                        <div class="footer-left">
+                            <div class="icon-btn ${diary.isLiked ? 'liked' : ''}" onclick="toggleLike(${diary.id})">
+                                ${diary.isLiked ? '♥' : '♡'}
+                            </div>
+                            <div class="icon-btn ${diary.isCollected ? 'collected' : ''}" onclick="toggleCollect(${diary.id})">
+                                ${diary.isCollected ? '★' : '☆'}
+                            </div>
+                        </div>
+                        <div class="date-tag">右滑删除</div>
+                    </div>
+                `;
+
+                // 评论区
+                html += `<div class="comments-section">`;
+                if(diary.comments && diary.comments.length > 0) {
+                    diary.comments.forEach(c => {
+                        html += `<div class="comment-row"><span class="c-name">${c.author}:</span><span class="c-content">${c.text}</span></div>`;
+                    });
+                }
+                // 评论输入框
+                html += `
+                    <div class="input-comment-box">
+                        <input type="text" class="c-input" placeholder="写评论..." id="input-${diary.id}">
+                        <button class="c-send" onclick="sendComment(${diary.id})">发送</button>
+                    </div>
+                `;
+                html += `</div>`; // end comment section
+
+                card.innerHTML = html;
+                container.appendChild(card);
+            });
+            
+            // 渲染完毕后自动滚动到底部，方便查看最新日记
+            setTimeout(() => {
+                container.scrollTop = 0;
+            }, 100);
+        }
+
+        // --- 右滑删除逻辑 ---
+        function handleSwipe(el, id) {
+            let startX = 0;
+            el.addEventListener('touchstart', e => { startX = e.touches[0].clientX; });
+            el.addEventListener('touchend', e => {
+                const endX = e.changedTouches[0].clientX;
+                if (endX - startX > 100) { // 向右滑超过100px
+                    openDeleteModal(id);
+                }
+            });
+        }
+
+        function openDeleteModal(id) {
+            deleteTargetId = id;
+            const m = document.getElementById('deleteModal');
+            m.style.display = 'flex';
+            setTimeout(()=>m.classList.add('show'), 10);
+        }
+        function closeDeleteModal() {
+            const m = document.getElementById('deleteModal');
+            m.classList.remove('show');
+            setTimeout(()=>m.style.display='none', 300);
+            deleteTargetId = null;
+        }
+        function confirmDelete() {
+            if(deleteTargetId) {
+                // 删除日记
+                diaries = diaries.filter(d => d.id !== deleteTargetId);
+                saveData();
+                renderDiaries();
+            }
+            closeDeleteModal();
+        }
+
+        // --- 互动功能 (点赞/收藏) ---
+        function toggleLike(id) {
+            const d = diaries.find(x => x.id === id);
+            if(d) { d.isLiked = !d.isLiked; saveData(); renderDiaries(); }
+        }
+
+        async function toggleCollect(id) {
+            const d = diaries.find(x => x.id === id);
+            if(!d) return;
+            
+            d.isCollected = !d.isCollected;
+            await saveData(); // 保存日记本身的状态
+
+            // 同步到 qq_collect (qq_collect.html)
+            const rawCollects = await dbGet(COLLECT_KEY);
+            const allCollects = (typeof rawCollects === 'string') ? JSON.parse(rawCollects) : (rawCollects || []);
+            
+            if (d.isCollected) {
+                // 添加到收藏夹头部
+                allCollects.unshift({
+                    id: Date.now(),
+                    type: 'diary', // 标记类型为日记
+                    charName: d.authorName,
+                    date: d.date,
+                    content: d.content,
+                    paperStyle: d.paperStyle
+                });
+            } else {
+                // 如果取消收藏，仅取消星星高亮，通常不自动从收藏夹物理删除，以免误删
+                // (如果需要自动删除，可以在这里遍历 allCollects 并 splice)
+            }
+            await dbSet(COLLECT_KEY, JSON.stringify(allCollects));
+            renderDiaries();
+        }
+
+        // --- API 调用核心 ---
+        async function callAi(prompt, maxTokens = 1000) {
+            // 1. 优先读取新版统一配置 (qq_ai_config)
+            let config = await dbGet('qq_ai_config');
+
+            // 2. 兼容旧版配置
+            if (!config) {
+                const rawPresets = await dbGet('aiPhone_presets');
+                const currentId = await dbGet('aiPhone_currentId');
+                if (rawPresets && currentId) {
+                    const presets = (typeof rawPresets === 'string') ? JSON.parse(rawPresets) : rawPresets;
+                    config = presets.find(p => p.id == currentId);
+                }
+            }
+            
+            if(!config || !config.url || !config.key) throw new Error("API未配置，请去设置页保存");
+
+            let url = config.url.replace(/\/+$/, '');
+            if(url.endsWith('/v1')) url += '/chat/completions';
+            else if(url.endsWith('/chat/completions')) url = url;
+            else url += '/v1/chat/completions';
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+                body: JSON.stringify({
+                    model: config.model,
+                    messages: [{role: "user", content: prompt}],
+                    temperature: 0.85
+                })
+            });
+            const data = await res.json();
+            return data.choices[0].message.content;
+        }
+
+        // --- 生成角色日记 ---
+        async function triggerAiDiary() {
+            if(!currentChar) return;
+            showLoading("对方正在写日记...");
+            
+            try {
+                const history = (currentChar.history || []).slice(-200);
+                const chatText = history.map(m => `${m.role==='user'?'用户':currentChar.name}: ${m.content}`).join('\n');
+                const persona = currentChar.persona || "无";
+                
+                const prompt = `
+                你现在是 ${currentChar.name}。
+                请根据以下设定和最近的聊天记录，写一篇第一人称的日记。
+                
+                【人设】
+                ${persona}
+                
+                【世界观设定】
+                ${currentChar.cachedWorldInfo || "无"}
+
+                【最近对话记忆】
+                ${chatText}
+
+                【重要要求】
+                1. 字数400-600字。
+                2. 必须符合人设，严禁OOC。
+                3. 内容要围绕最近发生的事或对话中的感悟。
+                4. 请使用 HTML 标签来增加手写信的视觉效果。你可以随机使用以下 class 标签包裹特定的句子或词语来表达情绪：
+                   - <span class="fx-bold">粗体强调</span>
+                   - <span class="fx-strike">写错划掉的内容(比如心里话不敢说)</span>
+                   - <span class="fx-big">大字(激动时)</span>
+                   - <span class="fx-small">小字(碎碎念)</span>
+                   - <span class="fx-color">彩色字(甜蜜时)</span>
+                   - <span class="fx-messy">凌乱字迹(心烦意乱时)</span>
+                   - <span class="fx-marker">高亮标记</span>
+                5. 输出格式：只输出日记内容的HTML，不需要标题，不需要markdown代码块标记。
+                `;
+
+                const content = await callAi(prompt);
+                
+                const cleanContent = content.replace(/```html/g, '').replace(/```/g, '').trim();
+
+                const newDiary = {
+                    id: Date.now(),
+                    authorName: currentChar.name,
+                    date: new Date().toLocaleString(),
+                    content: cleanContent,
+                    paperStyle: paperStyles[Math.floor(Math.random() * paperStyles.length)],
+                    isLiked: false,
+                    isCollected: false,
+                    comments: []
+                };
+
+                diaries.push(newDiary); // Push到末尾 (最新)
+                saveData();
+                renderDiaries();
+                hideLoading();
+
+            } catch(e) {
+                hideLoading();
+                alert("生成失败: " + e.message);
+            }
+        }
+
+        // --- 用户写日记 (已添加标题和日期) ---
+        function openWriteModal() {
+            // 清空输入框
+            document.getElementById('diaryTitleInput').value = '';
+            document.getElementById('diaryBodyInput').value = '';
+            // 默认设置今天日期
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('diaryDateInput').value = today;
+
+            const m = document.getElementById('writeModal');
+            m.style.display = 'flex';
+            setTimeout(()=>m.classList.add('show'), 10);
+        }
+        
+        function closeWriteModal() {
+            const m = document.getElementById('writeModal');
+            m.classList.remove('show');
+            setTimeout(()=>m.style.display='none', 300);
+        }
+
+        async function publishUserDiary() {
+            const title = document.getElementById('diaryTitleInput').value.trim();
+            const dateVal = document.getElementById('diaryDateInput').value;
+            const text = document.getElementById('diaryBodyInput').value.trim();
+            
+            if(!text) {
+                alert("请写点内容吧~");
+                return;
+            }
+
+            closeWriteModal();
+
+            // 格式化一下内容，把标题加粗放在最上面
+            let finalContent = "";
+            if(title) {
+                finalContent += `<div class="diary-user-title">${title}</div>`;
+            }
+            finalContent += text.replace(/\n/g, '<br>');
+
+            const newDiary = {
+                id: Date.now(),
+                authorName: '我',
+                date: dateVal || new Date().toLocaleDateString(), // 使用用户选择的日期
+                content: finalContent,
+                paperStyle: paperStyles[Math.floor(Math.random() * paperStyles.length)],
+                isLiked: false,
+                isCollected: false,
+                comments: []
+            };
+
+            diaries.push(newDiary); // Push到末尾
+            saveData();
+            renderDiaries();
+
+            // 触发 AI 评论
+            await generateAiComment(newDiary.id, text, true);
+        }
+
+        // --- 评论功能 ---
+        async function sendComment(diaryId) {
+            const input = document.getElementById(`input-${diaryId}`);
+            const text = input.value.trim();
+            if(!text) return;
+
+            const diary = diaries.find(d => d.id === diaryId);
+            if(!diary) return;
+
+            // 1. 添加用户评论
+            diary.comments.push({ author: '我', text: text });
+            saveData();
+            renderDiaries(); 
+
+            // 2. 触发 AI 回复
+            await generateAiComment(diaryId, text, false);
+        }
+
+        async function generateAiComment(diaryId, userText, isReviewingDiary) {
+            showLoading(isReviewingDiary ? "对方正在看你的日记..." : "对方正在回复...");
+            
+            try {
+                const diary = diaries.find(d => d.id === diaryId);
+                
+                // 提取人设，保持和日记生成一样的逻辑
+                const persona = currentChar.persona || "无";
+                
+                let prompt = `
+                你现在是 ${currentChar.name}。
+                
+                【人设与世界观】
+                ${persona}
+                ${currentChar.cachedWorldInfo || ""}
+
+                `;
+                
+                if (isReviewingDiary) {
+                    prompt += `
+                    【任务】
+                    用户(你的伴侣)刚写了一篇日记：
+                    "${userText}"
+                    
+                    请完全代入人设，以你的口吻在这篇日记下写一条评论。
+                    要求：
+                    1. 1-3句话，不要太长。
+                    2. 语气必须符合人设(OOC禁止)，日常、口语化。
+                    3. 结合人设中的性格特点进行回复。
+                    `;
+                } else {
+                    prompt += `
+                    【任务】
+                    用户在日记（内容概要：${diary.content.substring(0, 50)}...）下评论说：
+                    "${userText}"
+                    
+                    请完全代入人设回复这条评论。
+                    要求：1-3句话，日常口语化，严禁OOC。
+                    `;
+                }
+
+                const reply = await callAi(prompt);
+                
+                diary.comments.push({ author: currentChar.name, text: reply.replace(/"/g, '') });
+                saveData();
+                renderDiaries();
+                hideLoading();
+
+            } catch(e) {
+                hideLoading();
+                // 评论失败静默处理
+            }
+        }
+
+        function showLoading(text) {
+            document.getElementById('loadingText').innerText = text;
+            const m = document.getElementById('loadingModal');
+            m.style.display = 'flex';
+            setTimeout(()=>m.classList.add('show'), 10);
+        }
+        function hideLoading() {
+            const m = document.getElementById('loadingModal');
+            m.classList.remove('show');
+            setTimeout(()=>m.style.display='none', 300);
+        }
+
+    </script>
+</body>
+</html>

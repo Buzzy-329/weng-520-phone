@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Love Days</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; min-height: 100vh;
+            background: radial-gradient(circle at bottom, #1b2735 0%, #090a0f 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #fff; display: flex; flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* --- 浪漫星空背景动画 --- */
+        #stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        .star { position: absolute; background: white; border-radius: 50%; animation: twinkle infinite ease-in-out; }
+        @keyframes twinkle { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
+
+        /* --- 导航栏 --- */
+        .nav-bar {
+            padding: 40px 20px 15px; display: flex; justify-content: space-between; align-items: center;
+            position: relative; z-index: 10;
+        }
+        .nav-btn { font-size: 20px; color: #fff; cursor: pointer; padding: 5px; }
+        .nav-title { font-size: 18px; font-weight: 600; letter-spacing: 1px; }
+
+        /* --- 列表区 --- */
+        .list-container {
+            flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 20px;
+            overflow-y: auto; z-index: 5;
+        }
+        
+        .day-card {
+            position: relative;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            overflow: hidden;
+            height: 160px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; color: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .day-card:active { transform: scale(0.98); }
+
+        .card-bg {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; opacity: 0.4; z-index: 0;
+            filter: brightness(0.8);
+        }
+
+        .card-content { position: relative; z-index: 2; width: 100%; }
+        
+        .small-label { font-size: 13px; opacity: 0.9; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .big-num { 
+            font-size: 48px; font-weight: 700; margin: 5px 0; 
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5); font-family: 'Georgia', serif; 
+        }
+        .date-label { 
+            font-size: 12px; background: rgba(0,0,0,0.4); 
+            padding: 4px 10px; border-radius: 12px; display: inline-block; 
+            margin-top: 5px;
+        }
+
+        .empty-tip { text-align: center; color: rgba(255,255,255,0.4); margin-top: 100px; font-size: 14px; }
+
+        /* --- 弹窗 --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+            z-index: 100; display: none; justify-content: center; align-items: center;
+        }
+        .modal-box {
+            background: #fff; width: 85%; max-width: 320px; border-radius: 24px; padding: 25px;
+            display: flex; flex-direction: column; gap: 15px; color: #333;
+            animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes popIn { from{transform:scale(0.8);opacity:0;} to{transform:scale(1);opacity:1;} }
+        
+        .modal-title { text-align: center; font-size: 18px; font-weight: 600; margin-bottom: 5px; }
+        .m-input {
+            width: 100%; padding: 12px; background: #f5f5f7; border: 1px solid #e0e0e0;
+            border-radius: 12px; font-size: 15px; outline: none;
+        }
+        
+        .upload-area {
+            height: 100px; border: 2px dashed #ddd; border-radius: 12px;
+            display: flex; justify-content: center; align-items: center;
+            color: #999; font-size: 13px; position: relative; overflow: hidden;
+            background: #fafafa;
+        }
+        .upload-preview { width: 100%; height: 100%; object-fit: cover; position: absolute; top:0; left:0; }
+
+        .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+        .btn { flex: 1; padding: 14px; border-radius: 14px; border: none; font-size: 15px; font-weight: 600; }
+        .btn-cancel { background: #f0f0f0; color: #888; }
+        .btn-save { background: #333; color: #fff; }
+        .btn-del { width: 100%; background: #fff; border: 1px solid #ff4d4f; color: #ff4d4f; margin-top: 10px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+</head>
+<body>
+
+    <!-- 星空背景容器 -->
+    <div id="stars"></div>
+
+    <div class="nav-bar">
+        <div class="nav-btn" onclick="history.back()">←</div>
+        <div class="nav-title">纪念日</div>
+        <div class="nav-btn" onclick="openModal()">+</div>
+    </div>
+
+    <div class="list-container" id="daysList">
+        <div class="empty-tip">记录只属于你们的日子<br>点击右上角“+”添加</div>
+    </div>
+
+    <!-- 弹窗 -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal-box">
+            <div class="modal-title" id="modalTitle">添加纪念日</div>
+            
+            <input type="text" class="m-input" id="dayTitle" placeholder="纪念日名称 (如: 恋爱纪念日)">
+            
+            <!-- 这里使用date选择器，但我们逻辑上主要取月日 -->
+            <input type="date" class="m-input" id="dayDate">
+            
+            <div class="upload-area" onclick="document.getElementById('hiddenFile').click()">
+                <span id="uploadHint">点击上传背景图 (可选)</span>
+                <img id="imgPreview" class="upload-preview" style="display:none">
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+                <button class="btn btn-save" onclick="saveDay()">保存</button>
+            </div>
+            <button class="btn btn-del" id="delBtn" style="display:none" onclick="deleteDay()">删除</button>
+        </div>
+    </div>
+
+    <input type="file" id="hiddenFile" hidden accept="image/*" onchange="handleFile(this)">
+
+    <script>
+        // --- 核心：数据库连接工具 ---
+        let dbPromise;
+        function initDB() {
+            if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+            return dbPromise;
+        }
+        async function dbGet(key) {
+            const db = await initDB();
+            return await db.get('keyval', key);
+        }
+        async function dbSet(key, val) {
+            const db = await initDB();
+            return await db.put('keyval', val, key);
+        }
+        // --- 1. 生成星空特效 ---
+        const starContainer = document.getElementById('stars');
+        for(let i=0; i<40; i++) {
+            const s = document.createElement('div');
+            s.className = 'star';
+            const size = Math.random() * 3 + 'px';
+            s.style.width = size; s.style.height = size;
+            s.style.left = Math.random() * 100 + '%';
+            s.style.top = Math.random() * 100 + '%';
+            s.style.animationDelay = Math.random() * 3 + 's';
+            starContainer.appendChild(s);
+        }
+
+        // --- 2. 逻辑部分 ---
+        const DB_KEY = 'qq_app_data_pro_max_final';
+        let characters = [];
+        let currentChar = null;
+        let charId = null;
+        let editingId = null; // 当前正在编辑的ID，null为新增
+        let tempImg = null;
+
+        window.onload = async function() {
+            const params = new URLSearchParams(window.location.search);
+            charId = params.get('id');
+            if(!charId) { alert("未找到角色ID"); history.back(); return; }
+            
+            await loadData();
+        };
+
+        async function loadData() {
+            try {
+                // 从 QQ_DB_V3 读取数据
+                const raw = await dbGet(DB_KEY);
+                if (raw) {
+                    // 兼容处理：如果是字符串就解析，如果是对象直接用
+                    characters = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+                }
+                
+                currentChar = characters.find(c => c.id === charId);
+                
+                if(!currentChar) { history.back(); return; }
+                if(!currentChar.loveDays) currentChar.loveDays = []; // 初始化数组
+                
+                renderList();
+            } catch (e) {
+                console.error("读取数据失败", e);
+            }
+        }
+
+        async function saveData() {
+            const idx = characters.findIndex(c => c.id === charId);
+            if(idx !== -1) characters[idx] = currentChar;
+            
+            // 1. 存入 IDB (转为字符串以保持格式统一)
+            await dbSet(DB_KEY, JSON.stringify(characters)); 
+            
+            // 2. 广播通知：告诉 chat_window 和 love.html 数据变了
+            if (window.parent && window.parent.postMessage) {
+                window.parent.postMessage({ type: 'refresh_list' }, '*');
+            }
+            
+            renderList();
+        }
+
+        function renderList() {
+            const list = document.getElementById('daysList');
+            list.innerHTML = '';
+
+            if(currentChar.loveDays.length === 0) {
+                list.innerHTML = '<div class="empty-tip">记录只属于你们的日子<br>点击右上角“+”添加</div>';
+                return;
+            }
+
+            // 按距离天数排序 (最近的在上面)
+            currentChar.loveDays.sort((a,b) => calcDays(a.date) - calcDays(b.date));
+
+            currentChar.loveDays.forEach(day => {
+                const diff = calcDays(day.date);
+                
+                const card = document.createElement('div');
+                card.className = 'day-card';
+                card.onclick = () => openModal(day.id);
+
+                let bgHtml = '';
+                if(day.img) bgHtml = `<img src="${day.img}" class="card-bg">`;
+
+                // 格式化日期显示 MM月DD日
+                const dateObj = new Date(day.date);
+                const dateStr = `${dateObj.getMonth()+1}月${dateObj.getDate()}日`;
+
+                card.innerHTML = `
+                    ${bgHtml}
+                    <div class="card-content">
+                        <div class="small-label">距离 ${day.title} 还有</div>
+                        <div class="big-num">${diff} <span style="font-size:16px;font-weight:normal">天</span></div>
+                        <div class="date-label">${dateStr}</div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        // 计算距离下次日期的天数
+        function calcDays(dateStr) {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // 清除时分秒
+            
+            const targetParts = dateStr.split('-');
+            // 假设今年
+            let target = new Date(today.getFullYear(), parseInt(targetParts[1])-1, parseInt(targetParts[2]));
+            
+            // 如果今年的这个日子已经过了，就算明年的
+            if(target < today) {
+                target.setFullYear(today.getFullYear() + 1);
+            }
+            
+            const diffTime = target - today;
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        }
+
+        // --- 弹窗逻辑 ---
+        function openModal(id = null) {
+            editingId = id;
+            const modal = document.getElementById('editModal');
+            const titleIn = document.getElementById('dayTitle');
+            const dateIn = document.getElementById('dayDate');
+            const delBtn = document.getElementById('delBtn');
+            const preview = document.getElementById('imgPreview');
+            const hint = document.getElementById('uploadHint');
+
+            if(id) {
+                // 编辑模式
+                const day = currentChar.loveDays.find(d => d.id === id);
+                document.getElementById('modalTitle').innerText = "修改纪念日";
+                titleIn.value = day.title;
+                dateIn.value = day.date; // YYYY-MM-DD
+                tempImg = day.img;
+                delBtn.style.display = 'block';
+
+                if(day.img) {
+                    preview.src = day.img;
+                    preview.style.display = 'block';
+                    hint.style.display = 'none';
+                } else {
+                    preview.style.display = 'none';
+                    hint.style.display = 'block';
+                }
+            } else {
+                // 新增模式
+                document.getElementById('modalTitle').innerText = "添加纪念日";
+                titleIn.value = '';
+                dateIn.value = '';
+                tempImg = null;
+                delBtn.style.display = 'none';
+                preview.style.display = 'none';
+                hint.style.display = 'block';
+            }
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        // 处理图片上传 + 偷偷压缩
+        function handleFile(input) {
+            const file = input.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    // 创建Canvas进行压缩
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 限制最大宽度 600px (肉眼看不出，但很省空间)
+                    const maxW = 600;
+                    let w = img.width;
+                    let h = img.height;
+                    
+                    if(w > maxW) {
+                        h *= maxW / w;
+                        w = maxW;
+                    }
+                    
+                    canvas.width = w;
+                    canvas.height = h;
+                    ctx.drawImage(img, 0, 0, w, h);
+                    
+                    // 压缩质量 0.7
+                    tempImg = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    // 预览
+                    document.getElementById('imgPreview').src = tempImg;
+                    document.getElementById('imgPreview').style.display = 'block';
+                    document.getElementById('uploadHint').style.display = 'none';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            input.value = ''; // 允许重复上传同一张
+        }
+
+        function saveDay() {
+            const title = document.getElementById('dayTitle').value.trim();
+            const date = document.getElementById('dayDate').value;
+
+            if(!title || !date) { alert("请填写完整信息"); return; }
+            
+            // 解析出 MM-DD 格式，用于 Chat Window 匹配 (dateStr)
+            const parts = date.split('-');
+            const mmdd = `${parts[1]}-${parts[2]}`;
+
+            if(editingId) {
+                // 更新
+                const idx = currentChar.loveDays.findIndex(d => d.id === editingId);
+                if(idx !== -1) {
+                    currentChar.loveDays[idx].title = title;
+                    currentChar.loveDays[idx].date = date; // 完整日期用于计算
+                    currentChar.loveDays[idx].dateStr = mmdd; // MM-DD 用于AI感知
+                    currentChar.loveDays[idx].img = tempImg;
+                }
+            } else {
+                // 新增
+                currentChar.loveDays.push({
+                    id: Date.now().toString(),
+                    title: title,
+                    date: date,
+                    dateStr: mmdd,
+                    img: tempImg
+                });
+            }
+            saveData();
+            closeModal();
+        }
+
+        function deleteDay() {
+            if(confirm("确定要删除这个纪念日吗？")) {
+                currentChar.loveDays = currentChar.loveDays.filter(d => d.id !== editingId);
+                saveData();
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>

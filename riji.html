@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>我的日记</title>
+    <style>
+        /* --- 风格复刻 Settings --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background: linear-gradient(180deg, #fff0f5 0%, #ffe4e1 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #5d5d5d;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* --- 顶部导航 --- */
+        .nav-bar {
+            padding: 50px 24px 20px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .back-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; box-shadow: 0 4px 12px rgba(255, 182, 193, 0.2);
+            font-size: 18px; color: #888; transition: transform 0.2s;
+        }
+        .back-btn:active { transform: scale(0.9); }
+        .page-title { font-size: 18px; font-weight: 600; color: #7a6a6a; }
+        .right-placeholder { width: 40px; }
+
+        /* --- 日历主体 --- */
+        .calendar-container {
+            flex: 1; padding: 10px 20px;
+            display: flex; flex-direction: column; gap: 20px;
+            overflow-y: auto;
+        }
+
+        /* 月份切换栏 */
+        .month-header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255, 255, 255, 0.85);
+            padding: 15px 20px; border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(230, 200, 200, 0.3);
+        }
+        .month-btn {
+            font-size: 18px; color: #ffb7b2; cursor: pointer; padding: 5px 10px; font-weight: bold;
+        }
+        .current-month { font-size: 16px; font-weight: 600; color: #555; }
+
+        /* 星期头 */
+        .weekdays {
+            display: grid; grid-template-columns: repeat(7, 1fr);
+            text-align: center; margin-bottom: 5px;
+        }
+        .weekday { font-size: 12px; color: #aaa; font-weight: 600; }
+
+        /* 日期网格 */
+        .days-grid {
+            display: grid; grid-template-columns: repeat(7, 1fr);
+            gap: 10px; row-gap: 15px;
+        }
+        .day-cell {
+            aspect-ratio: 1; display: flex; justify-content: center; align-items: center;
+            font-size: 15px; color: #666; cursor: pointer;
+            border-radius: 50%; position: relative;
+            transition: all 0.2s;
+        }
+        .day-cell:active { background: rgba(255,255,255,0.5); }
+        
+        /* 今天样式 */
+        .day-cell.today {
+            background: #ffb7b2; color: white;
+            box-shadow: 0 4px 10px rgba(255, 183, 178, 0.6);
+            font-weight: bold;
+        }
+        
+        /* 经期样式 (数字变粉) */
+        .day-cell.period-active { color: #ff6b81; font-weight: 800; }
+        .day-cell.today.period-active { color: white; background: #ff6b81; }
+
+        /* 待办小点点 (如果有待办) */
+        .has-todo-dot {
+            position: absolute; bottom: 4px; width: 4px; height: 4px;
+            background: #aaa; border-radius: 50%;
+        }
+        .day-cell.today .has-todo-dot { background: white; }
+
+        /* --- 弹窗样式 (复用Settings) --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.2); backdrop-filter: blur(5px);
+            z-index: 100; display: none; justify-content: center; align-items: center;
+        }
+        .modal-overlay.active { display: flex; animation: fadeIn 0.2s; }
+        @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+
+        .modal-card {
+            background: rgba(255,255,255,0.98); width: 85%; max-width: 320px;
+            padding: 25px; border-radius: 24px;
+            box-shadow: 0 0 30px rgba(255, 182, 193, 0.4);
+            display: flex; flex-direction: column; gap: 15px;
+            transform: scale(0.95); animation: popUp 0.2s forwards;
+        }
+        @keyframes popUp { to{transform: scale(1);} }
+
+        .modal-title { font-size: 18px; font-weight: 600; color: #555; text-align: center; }
+        .modal-date { font-size: 12px; color: #aaa; text-align: center; margin-top: -10px; margin-bottom: 5px; }
+
+        /* 待办列表样式 */
+        .todo-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .todo-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px; background: #f9f9fc; border-radius: 12px;
+        }
+        .todo-checkbox {
+            width: 18px; height: 18px; border: 2px solid #ddd; border-radius: 4px;
+            flex-shrink: 0; cursor: pointer; display: flex; justify-content: center; align-items: center;
+        }
+        .todo-checkbox.checked { background: #4cd964; border-color: #4cd964; }
+        .todo-checkbox.checked::after { content: '✔'; font-size: 12px; color: white; }
+        
+        .todo-text { flex: 1; font-size: 14px; color: #555; }
+        .todo-text.checked { text-decoration: line-through; color: #bbb; }
+        .todo-del { color: #ff6b6b; font-size: 16px; padding: 0 5px; cursor: pointer; }
+
+        .empty-tip { text-align: center; font-size: 13px; color: #ccc; padding: 20px 0; }
+
+        /* 按钮组 */
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .big-btn {
+            padding: 12px; border-radius: 16px; border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            background: #fff; color: #555; box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+        .big-btn.pink { background: #ffb7b2; color: white; }
+        .big-btn:active { transform: scale(0.98); }
+
+        /* 输入框 */
+        .input-box {
+            width: 100%; padding: 12px; border: 1px solid #eee; background: #f5f5f7;
+            border-radius: 12px; font-size: 14px; outline: none;
+        }
+
+        /* 经期选择器 */
+        .period-options { display: flex; flex-direction: column; gap: 10px; }
+        .option-row { display: flex; gap: 8px; justify-content: center; }
+        .opt-chip {
+            padding: 8px 12px; border-radius: 20px; background: #f0f0f0; color: #888;
+            font-size: 12px; cursor: pointer; border: 1px solid transparent;
+        }
+        .opt-chip.active { background: #fff0f3; color: #ff6b81; border-color: #ffb7b2; }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    <script>
+        
+        // ---【新增】建立通信频道 ---
+        const rijiChannel = new BroadcastChannel('buzzy_sync_channel');
+        
+        // 监听其他窗口发来的更新通知
+        rijiChannel.onmessage = async (event) => {
+            // 如果其他窗口更新了日记数据，这边也刷新
+            if (event.data && event.data.type === 'riji_update') {
+                await loadData();
+                renderCalendar();
+                // 如果当前打开了详情页，也刷新详情页
+                if(selectedDateStr && document.getElementById('dayModal').classList.contains('active')) {
+                   renderTodoList();
+                }
+            }
+        };
+    </script>
+</head>
+<body>
+
+    <!-- 导航 -->
+    <div class="nav-bar">
+        <div class="back-btn" onclick="goBack()">←</div>
+        <div class="page-title">日记本</div>
+        <div class="right-placeholder"></div>
+    </div>
+
+    <div class="calendar-container">
+        <!-- 月份栏 -->
+        <div class="month-header">
+            <div class="month-btn" onclick="changeMonth(-1)">‹</div>
+            <div class="current-month" id="monthLabel">2026年 1月</div>
+            <div class="month-btn" onclick="changeMonth(1)">›</div>
+        </div>
+
+        <!-- 日历网格 -->
+        <div>
+            <div class="weekdays">
+                <div class="weekday">日</div><div class="weekday">一</div><div class="weekday">二</div>
+                <div class="weekday">三</div><div class="weekday">四</div><div class="weekday">五</div>
+                <div class="weekday">六</div>
+            </div>
+            <div class="days-grid" id="daysContainer">
+                <!-- JS生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. 日期详情弹窗 -->
+    <div class="modal-overlay" id="dayModal">
+        <div class="modal-card">
+            <div class="modal-title" id="modalTitle">1月19日</div>
+            <div class="modal-date">待办 & 记录</div>
+            
+            <div class="todo-list" id="todoListDisplay">
+                <!-- 待办项 -->
+            </div>
+
+            <div class="action-grid">
+                <button class="big-btn" onclick="openAddTodo()">+ 添加待办</button>
+                <button class="big-btn" onclick="openPeriodModal()">❤ 经期记录</button>
+            </div>
+            <button class="big-btn" style="width:100%; margin-top:5px; background:#f5f5f5; color:#999;" onclick="closeModal('dayModal')">关闭</button>
+        </div>
+    </div>
+
+    <!-- 2. 添加待办弹窗 -->
+    <div class="modal-overlay" id="addTodoModal">
+        <div class="modal-card">
+            <div class="modal-title">添加待办</div>
+            <input type="text" class="input-box" id="newTodoInput" placeholder="要做什么呢？">
+            <div class="action-grid">
+                <button class="big-btn" onclick="closeModal('addTodoModal')">取消</button>
+                <button class="big-btn pink" onclick="confirmAddTodo()">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 经期记录弹窗 -->
+    <div class="modal-overlay" id="periodModal">
+        <div class="modal-card">
+            <div class="modal-title" style="color:#ff6b81">经期记录</div>
+            
+            <div class="period-options">
+                <div style="font-size:12px; color:#aaa; text-align:center;">流量</div>
+                <div class="option-row" id="flowOpts">
+                    <div class="opt-chip" onclick="selectOpt('flow', '少')">量少</div>
+                    <div class="opt-chip" onclick="selectOpt('flow', '中')">中等</div>
+                    <div class="opt-chip" onclick="selectOpt('flow', '大')">量大</div>
+                </div>
+                
+                <div style="font-size:12px; color:#aaa; text-align:center; margin-top:5px;">痛感</div>
+                <div class="option-row" id="painOpts">
+                    <div class="opt-chip" onclick="selectOpt('pain', '不痛')">不痛</div>
+                    <div class="opt-chip" onclick="selectOpt('pain', '痛')">痛</div>
+                    <div class="opt-chip" onclick="selectOpt('pain', '很痛')">很痛</div>
+                </div>
+            </div>
+
+            <div class="action-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                <button class="big-btn" onclick="closeModal('periodModal')">取消</button>
+                <button class="big-btn" style="color:#ff6b6b; font-size:12px;" onclick="deletePeriod()">删除记录</button>
+                <button class="big-btn pink" onclick="savePeriod()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let dbPromise;
+    function initDB() {
+        if (!dbPromise) {
+            dbPromise = idb.openDB('QQ_DB_2026', 1, {
+                upgrade(db) {
+                    if (!db.objectStoreNames.contains('keyval')) {
+                        db.createObjectStore('keyval');
+                    }
+                },
+            });
+        }
+        return dbPromise;
+    }
+    async function dbGet(key) {
+        const db = await initDB();
+        return await db.get('keyval', key);
+    }
+    async function dbSet(key, val) {
+        const db = await initDB();
+        return await db.put('keyval', val, key);
+    }
+        // 数据存储Key
+        const DB_KEY = 'riji_data';
+        // 用于通知ChatWindow有变化的Key
+        const SYNC_KEY = 'riji_latest_action'; 
+        
+        let currentDate = new Date(); // 当前显示的月份
+        const today = new Date();     // 真实的今天
+        let selectedDateStr = null;   // 当前点击的日期 YYYY-MM-DD
+        let data = {}; // 内存数据
+
+        // 临时经期选择
+        let tempPeriod = { flow: '', pain: '' };
+
+        async function loadData() {
+            data = (await dbGet(DB_KEY)) || {};
+        }
+        async function saveData() {
+            await dbSet(DB_KEY, data);
+            rijiChannel.postMessage({ type: 'riji_update' });
+        }
+
+        // --- 核心同步逻辑：设置变动Flag ---
+        // actionText: "添加了待办: XXX" 或 "记录了生理期"
+        async function notifyChat(actionText) {
+            // 只有当操作的是“今天”的数据时，才通知角色
+            const todayStr = getFormatDate(today);
+            if (selectedDateStr === todayStr) {
+                await dbSet(SYNC_KEY, actionText);
+            }
+        }
+
+        function goBack() { 
+            // 如果是在 iframe 里，调用父窗口的关闭方法，享受丝滑动画
+            if (window.parent && window.parent.closeApp) {
+                window.parent.closeApp();
+            } else {
+                // 如果是单独打开的网页，才跳转
+                window.location.href = 'index.html'; 
+            }
+        }
+
+        window.onload = async function() {
+            await loadData();
+            renderCalendar();
+        };
+
+        // --- 日历渲染 ---
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            document.getElementById('monthLabel').innerText = `${year}年 ${month+1}月`;
+
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startDayOfWeek = firstDay.getDay(); // 0(日)-6(六)
+
+            const container = document.getElementById('daysContainer');
+            container.innerHTML = '';
+
+            // 补白
+            for(let i=0; i<startDayOfWeek; i++) {
+                container.appendChild(document.createElement('div'));
+            }
+
+            // 生成日期
+            for(let d=1; d<=daysInMonth; d++) {
+                const dateObj = new Date(year, month, d);
+                const dateStr = getFormatDate(dateObj);
+                const cell = document.createElement('div');
+                cell.className = 'day-cell';
+                cell.innerText = d;
+                
+                // 1. 今天样式
+                if (dateStr === getFormatDate(today)) {
+                    cell.classList.add('today');
+                }
+
+                const dayData = data[dateStr];
+
+                // 2. 经期样式
+                if (dayData && dayData.period) {
+                    cell.classList.add('period-active');
+                }
+
+                // 3. 待办红点
+                if (dayData && dayData.todos && dayData.todos.length > 0) {
+                    // 检查是否全完成了，全完成就不显示点点？或者显示绿点？
+                    // 需求说：如果一条都没有就不出现。我们假设只要有未完成的就显示
+                    const hasUnfinished = dayData.todos.some(t => !t.done);
+                    if (hasUnfinished || dayData.todos.length > 0) {
+                        const dot = document.createElement('div');
+                        dot.className = 'has-todo-dot';
+                        cell.appendChild(dot);
+                    }
+                }
+
+                cell.onclick = () => openDay(dateStr);
+                container.appendChild(cell);
+            }
+        }
+
+        function changeMonth(delta) {
+            currentDate.setMonth(currentDate.getMonth() + delta);
+            renderCalendar();
+        }
+
+        function getFormatDate(date) {
+            const y = date.getFullYear();
+            const m = (date.getMonth()+1).toString().padStart(2,'0');
+            const d = date.getDate().toString().padStart(2,'0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // --- 弹窗逻辑 ---
+        function openDay(dateStr) {
+            selectedDateStr = dateStr;
+            const parts = dateStr.split('-');
+            document.getElementById('modalTitle').innerText = `${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+            
+            renderTodoList();
+            
+            document.getElementById('dayModal').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            if(id === 'dayModal') {
+                renderCalendar(); // 关闭主弹窗时刷新日历
+            }
+        }
+
+        // --- 待办事项逻辑 ---
+        function renderTodoList() {
+            const listEl = document.getElementById('todoListDisplay');
+            listEl.innerHTML = '';
+            
+            const dayData = data[selectedDateStr] || {};
+            const todos = dayData.todos || [];
+
+            if (todos.length === 0) {
+                listEl.innerHTML = '<div class="empty-tip">今天没有待办事项哦~</div>';
+                return;
+            }
+
+            todos.forEach((todo, index) => {
+                const item = document.createElement('div');
+                item.className = 'todo-item';
+                item.innerHTML = `
+                    <div class="todo-checkbox ${todo.done?'checked':''}" onclick="toggleTodo(${index})"></div>
+                    <div class="todo-text ${todo.done?'checked':''}" onclick="toggleTodo(${index})">${todo.text}</div>
+                    <div class="todo-del" onclick="deleteTodo(${index})">×</div>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        function openAddTodo() {
+            document.getElementById('newTodoInput').value = '';
+            document.getElementById('addTodoModal').classList.add('active');
+        }
+
+        function confirmAddTodo() {
+            const text = document.getElementById('newTodoInput').value.trim();
+            if(!text) return;
+
+            if(!data[selectedDateStr]) data[selectedDateStr] = {};
+            if(!data[selectedDateStr].todos) data[selectedDateStr].todos = [];
+
+            data[selectedDateStr].todos.push({ text: text, done: false });
+            saveData();
+            renderTodoList();
+            closeModal('addTodoModal');
+
+            // 通知角色
+            notifyChat(`我添加了一条待办：${text}`);
+        }
+
+        function toggleTodo(index) {
+            const todo = data[selectedDateStr].todos[index];
+            todo.done = !todo.done;
+            saveData();
+            renderTodoList();
+            
+            // 通知角色 (只有完成时才说，或者变动都说)
+            // 需求：当待办变化（包括完成）。
+            if(todo.done) {
+                notifyChat(`我完成了待办：${todo.text}`);
+            } else {
+                notifyChat(`我把待办“${todo.text}”重置为未完成了`);
+            }
+        }
+
+        function deleteTodo(index) {
+            data[selectedDateStr].todos.splice(index, 1);
+            saveData();
+            renderTodoList();
+            // 需求：不包括删除待办，所以这里不调用 notifyChat
+        }
+
+        // --- 经期记录逻辑 ---
+        function openPeriodModal() {
+            tempPeriod = { flow: '', pain: '' };
+            // 回显
+            if(data[selectedDateStr] && data[selectedDateStr].period) {
+                tempPeriod = { ...data[selectedDateStr].period };
+            }
+            updateOptUI();
+            document.getElementById('periodModal').classList.add('active');
+        }
+
+        function selectOpt(type, val) {
+            tempPeriod[type] = val;
+            updateOptUI();
+        }
+
+        function updateOptUI() {
+            // 刷新选中状态
+            const flows = document.getElementById('flowOpts').children;
+            for(let c of flows) {
+                c.classList.toggle('active', c.innerText.includes(tempPeriod.flow));
+            }
+            const pains = document.getElementById('painOpts').children;
+            for(let c of pains) {
+                c.classList.toggle('active', c.innerText === tempPeriod.pain); // 痛感需全匹配
+            }
+        }
+
+        function savePeriod() {
+            if(!tempPeriod.flow || !tempPeriod.pain) {
+                alert("请选择流量和痛感");
+                return;
+            }
+            if(!data[selectedDateStr]) data[selectedDateStr] = {};
+            data[selectedDateStr].period = tempPeriod;
+            saveData();
+            closeModal('periodModal');
+            
+            // 通知角色
+            // 需求：今天的变化角色才提及。
+            notifyChat(`今天来了月经，流量${tempPeriod.flow}，${tempPeriod.pain}`);
+        }
+
+        function deletePeriod() {
+            if(data[selectedDateStr]) {
+                delete data[selectedDateStr].period;
+                saveData();
+            }
+            closeModal('periodModal');
+            
+            // 通知角色：取消了记录意味着没来
+            // 这个通常不用特意说“我没来”，除非你希望角色知道。按照常理，删除记录就是修正错误，角色保持沉默即可。
+            // notifyChat(`删除了今天的月经记录`); // 暂时注释掉，避免太啰嗦
+        }
+
+    </script>
+</body>
+</html>

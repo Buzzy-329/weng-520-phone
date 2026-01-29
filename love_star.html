@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>共赏星空</title>
+    <style>
+        /* --- 基础样式 --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #02040a; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+        
+        /* 画布层 */
+        canvas { display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* UI层 */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+
+        /* 返回按钮 */
+        .back-btn {
+            position: absolute; top: 40px; left: 24px;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            display: flex; justify-content: center; align-items: center;
+            color: #fff; font-size: 18px; cursor: pointer; pointer-events: auto;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        /* 对话框 */
+        .dialogue-box {
+            position: absolute; bottom: 140px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 500px;
+            min-height: 60px;
+            background: rgba(20, 24, 35, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 18px 24px;
+            color: #eef;
+            opacity: 0; transition: opacity 0.5s, transform 0.5s;
+            pointer-events: none;
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        .dialogue-box.active { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .dialogue-box.hidden { transform: translateX(-50%) translateY(15px); }
+        
+        .char-name { font-size: 12px; color: #aeb9cc; font-weight: 700; display: flex; align-items: center; gap: 5px;}
+        .char-name::before { content:''; display:block; width:6px; height:6px; background:#70a1ff; border-radius:50%; box-shadow: 0 0 8px #70a1ff; }
+        .char-text { font-size: 15px; line-height: 1.6; font-weight: 400; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+
+        /* 聊天按钮 */
+        .chat-trigger {
+            position: absolute; bottom: 40px; right: 24px;
+            width: 56px; height: 56px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; pointer-events: auto;
+        }
+        .chat-icon { width: 24px; height: 24px; fill: #fff; }
+
+        /* 输入框 */
+        .input-overlay {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+            z-index: 20; display: flex; align-items: flex-end;
+            visibility: hidden; opacity: 0; transition: all 0.3s; pointer-events: auto;
+        }
+        .input-overlay.show { visibility: visible; opacity: 1; }
+        
+        .input-area {
+            width: 100%; background: #151922;
+            padding: 15px 20px 35px 20px;
+            border-radius: 28px 28px 0 0;
+            display: flex; gap: 12px;
+            transform: translateY(100%); transition: transform 0.35s;
+        }
+        .input-overlay.show .input-area { transform: translateY(0); }
+        
+        input[type="text"] {
+            flex: 1; background: rgba(255,255,255,0.06); border: none;
+            border-radius: 20px; padding: 14px 18px; color: #fff; font-size: 16px;
+        }
+        .send-btn {
+            background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+            border: none; color: #fff; padding: 0 24px; border-radius: 20px; font-weight: 700; cursor: pointer;
+        }
+
+        /* 状态提示 */
+        .toast {
+            position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.95); color: #333; padding: 10px 20px;
+            border-radius: 30px; font-size: 13px; font-weight: 600;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            z-index: 100; text-align: center;
+        }
+
+        /* --- 新增：历史记录按钮 (左下角) --- */
+        .history-trigger {
+            position: absolute; bottom: 40px; left: 24px;
+            width: 56px; height: 56px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; pointer-events: auto; z-index: 15;
+        }
+        .history-icon { width: 26px; height: 26px; fill: #fff; }
+
+        /* --- 新增：历史消息弹窗 --- */
+        .history-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+            z-index: 50; opacity: 0; visibility: hidden; transition: all 0.3s;
+            display: flex; justify-content: center; align-items: center; pointer-events: auto;
+        }
+        .history-overlay.show { opacity: 1; visibility: visible; }
+        
+        .history-panel {
+            width: 85%; height: 70%; max-width: 500px;
+            background: #151922; border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px; display: flex; flex-direction: column; overflow: hidden;
+        }
+        .history-header {
+            padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05);
+            color: #fff; font-weight: 700; text-align: center; position: relative;
+        }
+        .close-history {
+            position: absolute; right: 15px; top: 15px; color: #aaa; cursor: pointer;
+        }
+        .history-list {
+            flex: 1; overflow-y: auto; padding: 15px;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        .h-msg { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; color: #eee; word-wrap: break-word;}
+        .h-msg.user { align-self: flex-end; background: #2b5278; border-bottom-right-radius: 2px; }
+        .h-msg.char { align-self: flex-start; background: #2a2f3e; border-bottom-left-radius: 2px; }
+        .h-name { font-size: 11px; color: #888; margin-bottom: 4px; }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+</head>
+<body>
+
+    <canvas id="starCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="back-btn" onclick="history.back()">←</div>
+        <div id="dialogueBox" class="dialogue-box">
+            <div class="char-name" id="charNameDisplay"></div>
+            <div class="char-text" id="charTextDisplay"></div>
+        </div>
+        <div class="history-trigger" id="historyBtn">
+            <svg class="history-icon" viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+        </div>
+        <div class="chat-trigger" id="chatBtn">
+            <svg class="chat-icon" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+        </div>
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <div class="history-overlay" id="historyOverlay">
+        <div class="history-panel">
+            <div class="history-header">
+                星空回忆
+                <div class="close-history" id="closeHistory">✕</div>
+            </div>
+            <div class="history-list" id="historyList">
+                <!-- 消息将通过JS插入这里 -->
+            </div>
+        </div>
+    </div>
+
+    <div class="input-overlay" id="inputOverlay">
+        <div class="input-area">
+            <input type="text" id="userMsgInput" placeholder="想对Ta说..." autocomplete="off">
+            <button class="send-btn" id="sendBtn">发送</button>
+        </div>
+    </div>
+
+<script>
+    // --- 数据库工具 ---
+let dbPromise;
+function initDB() {
+    if (!dbPromise) {
+    dbPromise = idb.openDB('QQ_DB_2026', 1, {
+        upgrade(db) {
+            // 这里只做一件事：如果没有 keyval 表，就建一个
+            if (!db.objectStoreNames.contains('keyval')) {
+                db.createObjectStore('keyval');
+            }
+        },
+    });
+}
+    return dbPromise;
+}
+async function dbGet(key) {
+    const db = await initDB();
+    return await db.get('keyval', key);
+}
+const CONFIG = {
+    DB_KEY: 'qq_app_data_pro_max_final',
+    WB_KEY: 'wb_books',
+    SETTINGS_KEY: 'aiPhone_presets',
+    SETTINGS_ID_KEY: 'aiPhone_currentId',
+    starCount: 220
+};
+
+const state = {
+    charData: null,
+    chatHistory: [],
+    sessionLog: [],
+    isTyping: false,
+    stars: [], clouds: [], lines: [],
+    w: 0, h: 0
+};
+
+const canvas = document.getElementById('starCanvas');
+const ctx = canvas.getContext('2d');
+
+async function init() {
+    resize();
+    window.addEventListener('resize', resize);
+    
+    // 1. 获取 ID (已修复)
+    const urlParams = new URLSearchParams(window.location.search);
+    const id = urlParams.get('id');
+    
+    // 2. 加载数据
+    if(!await loadCharacterData(id)) {
+        showToast("⚠️ 角色数据加载失败");
+    }
+    
+    createStars();
+    createClouds();
+    requestAnimationFrame(render);
+    
+    // 3. 事件
+    setInterval(checkIdle, 1000); 
+    setInterval(checkCloudOcclusion, 2000);
+    setTimeout(characterAutoDraw, 5000);
+    
+    bindEvents();
+}
+
+async function loadCharacterData(targetId) {
+    if(!targetId) return false;
+    try {
+        // 1. 读取角色列表
+        const rawChars = await dbGet(CONFIG.DB_KEY);
+        if(!rawChars) return false;
+        // 兼容处理：如果是字符串就解析
+        const chars = (typeof rawChars === 'string') ? JSON.parse(rawChars) : rawChars;
+        
+        const char = chars.find(c => c.id === targetId);
+        if(!char) return false;
+
+        // 2. 读取世界书 (无需 worldbook.html，直接读数据库)
+        let wbText = "";
+        let activeBookIds = char.worldBookIds || [];
+        // 兼容单选的情况
+        if (char.worldBookId && !activeBookIds.includes(char.worldBookId)) {
+            activeBookIds.push(char.worldBookId);
+        }
+
+        if (activeBookIds.length > 0) {
+            const rawBooks = await dbGet(CONFIG.WB_KEY); // 读取世界书库
+            if (rawBooks) {
+                const allBooks = (typeof rawBooks === 'string') ? JSON.parse(rawBooks) : rawBooks;
+                // 筛选并拼接内容
+                wbText = allBooks
+                    .filter(b => activeBookIds.includes(b.id))
+                    .map(b => `[世界设定:${b.name}]\n${b.content}`)
+                    .join("\n\n");
+            }
+        }
+
+        // 3. 构建数据对象
+        state.charData = {
+            name: char.name,
+            trueName: char.trueName || char.name,
+            persona: char.persona || "无",
+            userPersona: char.userPersona || "",
+            userNick: char.userNickName || "你",
+            worldInfo: wbText // 成功注入世界书
+        };
+        document.getElementById('charNameDisplay').innerText = state.charData.name;
+        return true;
+    } catch(e) { 
+        console.error(e); 
+        return false; 
+    }
+}
+
+// ---------------- 视觉逻辑 (高配版，包含云朵和贝塞尔曲线) ----------------
+const randomRange = (min, max) => Math.random() * (max - min) + min;
+
+// 星星
+class Star {
+    constructor() { this.reset(); }
+    reset() {
+        this.x = Math.random() * state.w;
+        this.y = Math.random() * state.h;
+        this.size = Math.random() * 1.5;
+        this.alpha = Math.random();
+        this.tSpeed = randomRange(0.01, 0.03) * (Math.random() < 0.5 ? 1 : -1);
+        const dist = Math.abs(this.y - (this.x * 0.7 + state.h/5));
+        this.isMilkyWay = dist < 120;
+        if(this.isMilkyWay) { this.size *= 0.8; this.alpha *= 0.7; }
+    }
+    draw() {
+        this.alpha += this.tSpeed;
+        if(this.alpha > 1 || this.alpha < 0.1) this.tSpeed *= -1;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fillStyle = this.isMilkyWay ? 
+            `rgba(200,220,255,${this.alpha*0.6})` : `rgba(255,255,255,${this.alpha})`;
+        ctx.shadowBlur = this.alpha * 4; ctx.shadowColor = "white"; 
+        ctx.fill(); 
+        ctx.shadowBlur = 0;
+    }
+}
+
+// 云朵粒子
+class CloudPuff {
+    constructor() {
+        this.offsetX = randomRange(-80, 80); 
+        this.offsetY = randomRange(-30, 30);
+        this.r = randomRange(30, 70); 
+        this.op = randomRange(0.2, 0.5);
+    }
+    draw(cx, cy, baseOp) {
+        const x = cx + this.offsetX; const y = cy + this.offsetY;
+        const grd = ctx.createRadialGradient(x, y, 5, x, y, this.r);
+        grd.addColorStop(0, `rgba(210,225,240,${this.op * baseOp})`);
+        grd.addColorStop(1, `rgba(210,225,240,0)`);
+        ctx.fillStyle = grd; 
+        ctx.beginPath(); ctx.arc(x, y, this.r, 0, Math.PI*2); ctx.fill();
+    }
+}
+
+// 云朵
+class Cloud {
+    constructor() {
+        this.x = randomRange(0, state.w); 
+        this.y = randomRange(50, state.h/2.5);
+        this.speed = randomRange(0.1, 0.25); 
+        this.baseOp = randomRange(0.5, 0.9);
+        this.puffs = Array.from({length:10}, () => new CloudPuff());
+    }
+    update() { this.x += this.speed; if(this.x > state.w + 200) this.x = -200; }
+    draw() { this.puffs.forEach(p => p.draw(this.x, this.y, this.baseOp)); }
+    checkCover(tx, ty) { return (Math.abs(tx - this.x) < 80 && Math.abs(ty - this.y) < 40 && this.baseOp > 0.6); }
+}
+
+// 贝塞尔线条
+class Line {
+    constructor(pts, type) { this.pts = pts; this.type = type; this.life = 1.0; }
+    draw() {
+        this.life -= 0.006; if(this.pts.length < 2) return;
+        
+        ctx.save(); 
+        ctx.beginPath(); 
+        ctx.moveTo(this.pts[0].x, this.pts[0].y);
+        
+        // 使用二次贝塞尔曲线实现丝滑效果
+        for(let i=1; i<this.pts.length-2; i++){
+            const xc = (this.pts[i].x + this.pts[i+1].x)/2; 
+            const yc = (this.pts[i].y + this.pts[i+1].y)/2;
+            ctx.quadraticCurveTo(this.pts[i].x, this.pts[i].y, xc, yc);
+        }
+        if(this.pts.length>2) { 
+            const l = this.pts[this.pts.length-1]; 
+            const sl = this.pts[this.pts.length-2]; 
+            ctx.quadraticCurveTo(sl.x, sl.y, l.x, l.y); 
+        }
+
+        const c = this.type === 'user' ? '255,210,120' : '120,190,255';
+        ctx.strokeStyle = `rgba(${c},${this.life})`; 
+        ctx.lineWidth = 3 * this.life;
+        ctx.lineCap = 'round'; 
+        ctx.shadowBlur = 10; ctx.shadowColor = `rgba(${c},1)`; 
+        ctx.stroke(); 
+        ctx.restore();
+    }
+}
+
+function createStars() { state.stars = Array.from({length: CONFIG.starCount}, () => new Star()); }
+function createClouds() { state.clouds = Array.from({length: 4}, () => new Cloud()); }
+
+function render() {
+    state.w = canvas.width = window.innerWidth; state.h = canvas.height = window.innerHeight;
+    const grd = ctx.createLinearGradient(0,0,0,state.h);
+    grd.addColorStop(0, '#03050e'); grd.addColorStop(1, '#0b1021');
+    ctx.fillStyle = grd; ctx.fillRect(0,0,state.w,state.h);
+    
+    state.stars.forEach(s => s.draw());
+    state.clouds.forEach(c => { c.update(); c.draw(); });
+    state.lines = state.lines.filter(l => l.life > 0);
+    state.lines.forEach(l => l.draw());
+    requestAnimationFrame(render);
+}
+function resize() { state.w = canvas.width = window.innerWidth; state.h = canvas.height = window.innerHeight; }
+
+// ---------------- 交互逻辑 ----------------
+let lastInteract = Date.now();
+
+function checkCollision(pt) {
+    if(state.isTyping || state.lines.length === 0) return;
+    const charLine = state.lines.find(l => l.type === 'char' && l.life > 0.4);
+    if(charLine) {
+        for(let p of charLine.pts) {
+            if(Math.hypot(p.x - pt.x, p.y - pt.y) < 30) { triggerEvent('collision'); return; }
+        }
+    }
+}
+function checkCloudOcclusion() {
+    if(state.isTyping) return;
+    const target = state.stars.find(s => s.y < state.h/2 && s.alpha > 0.8 && !s.isMilkyWay);
+    if(!target) return;
+    for(let c of state.clouds) {
+        if(c.checkCover(target.x, target.y)) { if(Math.random()<0.3) triggerEvent('cloud'); break; }
+    }
+}
+function checkIdle() {
+    if(!state.isTyping && Date.now() - lastInteract > 60000) { lastInteract = Date.now(); triggerEvent('idle'); }
+}
+function characterAutoDraw() {
+    if(!state.isTyping) {
+        const pts = []; let x = randomRange(state.w*0.3, state.w*0.7); let y = randomRange(state.h*0.1, state.h*0.4);
+        for(let i=0; i<30; i++) { 
+            pts.push({x, y}); 
+            x += randomRange(-25, 25); 
+            y += randomRange(-15, 15) + Math.sin(i*0.5)*8;
+        }
+        state.lines.push(new Line(pts, 'char'));
+    }
+    setTimeout(characterAutoDraw, randomRange(8000, 20000));
+}
+
+// ---------------- API 核心 (修改点：增加了随机提示词逻辑，确保每次反应不同) ----------------
+async function triggerEvent(type, content="") {
+    if(state.isTyping && type !== 'chat') return;
+    if(!state.charData) return;
+
+    state.isTyping = true;
+    lastInteract = Date.now();
+    showToast("Ta正在思考...");
+
+    const d = state.charData;
+    const systemPrompt = `
+    你现在正在进行角色扮演。
+    你的名字: ${d.trueName}
+    用户名字: ${d.userPersona ? "详见设定" : "User"}
+    你对用户的称呼: ${d.userNick}
+    
+    [你的详细人设]:
+    ${d.persona}
+    
+    [世界观]:
+    ${d.worldInfo}
+    
+    [用户设定]:
+    ${d.userPersona}
+    
+    [当前场景]:
+    深夜，户外，星空下。微风吹拂，氛围浪漫、安静、私密。
+    
+    [回复规则]:
+    1. 严禁OOC。请自然地用中文对话。
+    2. 回复长度: 1到5句话。
+    3. **格式要求**: 请用竖线符号 "|" 来分隔你的句子。例如："看那颗星。| 好亮啊。| 就像你的眼睛。"
+    `;
+
+    let userPrompt = "";
+
+    // --- 这里是修改的核心：随机提示词生成 ---
+    // 随机选择函数
+    const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    if(type === 'collision') {
+        const scenarios = [
+            "(系统提示: 用户的手指在星空中偶然碰到了你画的轨迹。请做出浪漫或害羞的反应)",
+            "(系统提示: 你们画出的线条在空中缠绕在一起了，就像一种隐喻。)",
+            "(系统提示: 用户正试图用手指'抓住'你画的星星，这一幕很可爱。)",
+            "(系统提示: 指尖划过的轨迹重叠了，空气中弥漫着暧昧的气息。)",
+            "(系统提示: 用户在追逐你的指尖轨迹，跟他/她互动一下。)"
+        ];
+        userPrompt = randomChoice(scenarios);
+    }
+    else if(type === 'cloud') {
+        const scenarios = [
+            "(系统提示: 一朵调皮的云遮住了你正在看的那颗星星。)",
+            "(系统提示: 乌云飘过，星光短暂暗淡了一下，你感到一丝遗憾。)",
+            "(系统提示: 云朵把星星藏起来了，就像在玩捉迷藏，评论一下这个场景。)",
+            "(系统提示: 天空突然暗了一点，云层变厚了，会不会下雨呢？)"
+        ];
+        userPrompt = randomChoice(scenarios);
+    }
+    else if(type === 'idle') {
+         const scenarios = [
+            "(系统提示: 空气很安静，只有微风的声音。主动开启一个温柔的话题)",
+            "(系统提示: 你们静静地看了一会儿星星。说点什么打破沉默，或者谈谈未来)",
+            "(系统提示: 夜色很美，适合说一些平时不好意思说出口的话)",
+            "(系统提示: 转头看看身边的用户，描述一下现在的感受)"
+        ];
+        userPrompt = randomChoice(scenarios);
+    }
+    else if(type === 'chat') {
+        userPrompt = `用户说: "${content}"`;
+        state.chatHistory.push({role:'user', content});
+        state.sessionLog.push({role:'user', content});
+    }
+
+    try {
+        const reply = await callApi(systemPrompt, userPrompt);
+        state.chatHistory.push({role:'assistant', content: reply.replace(/\|/g, " ")});
+        state.sessionLog.push({role:'assistant', content: reply.replace(/\|/g, " ")});
+        if(state.chatHistory.length > 8) state.chatHistory.shift();
+        const sentences = reply.split('|').map(s=>s.trim()).filter(s=>s);
+        playDialogue(sentences);
+    } catch(e) {
+        console.error(e);
+        alert("请求失败: " + e.message + "\n请检查API设置或网络。");
+        state.isTyping = false;
+    }
+}
+
+async function callApi(sys, usr) {
+    // 1. 优先读取新版统一配置
+    let config = await dbGet('qq_ai_config');
+
+    // 2. 如果没读到，尝试读取旧版列表（兼容逻辑）
+    if (!config) {
+        const presetsRaw = await dbGet(CONFIG.SETTINGS_KEY);
+        const currentId = await dbGet(CONFIG.SETTINGS_ID_KEY);
+        if (presetsRaw && currentId) {
+            const presets = (typeof presetsRaw === 'string') ? JSON.parse(presetsRaw) : presetsRaw;
+            config = presets.find(p => p.id == currentId);
+        }
+    }
+    
+    if(!config || !config.url || !config.key) throw new Error("API未配置，请去设置页保存配置");
+
+    // 处理 API URL 格式
+    let cleanUrl = config.url.trim().replace(/\/+$/, '');
+    let fetchUrl = '';
+    if (cleanUrl.endsWith('/v1')) { fetchUrl = cleanUrl + '/chat/completions'; }
+    else if (cleanUrl.endsWith('/chat/completions')) { fetchUrl = cleanUrl; }
+    else { fetchUrl = cleanUrl + '/v1/chat/completions'; }
+
+    const msgs = [
+        {role: 'system', content: sys},
+        ...state.chatHistory,
+        {role: 'user', content: usr}
+    ];
+
+    const res = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${config.key}` 
+        },
+        body: JSON.stringify({
+            model: config.model || 'gpt-3.5-turbo',
+            messages: msgs,
+            temperature: config.temperature || 0.85
+        })
+    });
+    
+    if(!res.ok) {
+        throw new Error(`HTTP Error: ${res.status}`);
+    }
+    
+    const json = await res.json();
+    if(!json.choices || json.choices.length === 0) throw new Error("空回复");
+    
+    return json.choices[0].message.content;
+}
+
+function playDialogue(list) {
+    const box = document.getElementById('dialogueBox');
+    const txtEl = document.getElementById('charTextDisplay');
+    const nameEl = document.getElementById('charNameDisplay');
+    
+    nameEl.innerText = state.charData.name;
+    
+    let idx = 0;
+    function next() {
+        if(idx >= list.length) {
+            state.isTyping = false;
+            setTimeout(() => { if(!state.isTyping) box.classList.remove('active'); }, 4000);
+            return;
+        }
+        txtEl.innerText = list[idx];
+        box.classList.remove('hidden');
+        box.classList.add('active');
+        
+        const time = Math.max(2000, list[idx].length * 200);
+        idx++;
+        setTimeout(next, time);
+    }
+    next();
+}
+
+// ---------------- 事件绑定 ----------------
+function bindEvents() {
+    let isDraw = false, path = [];
+    const start = (e) => {
+        if(e.target.closest('#ui-layer') && !e.target.classList.contains('back-btn')) return;
+        isDraw = true; path = [];
+        const {x,y} = getPos(e); path.push({x,y});
+        lastInteract = Date.now();
+    };
+    const move = (e) => {
+        if(!isDraw) return;
+        const {x,y} = getPos(e); path.push({x,y});
+        checkCollision({x,y});
+        if(path.length > 2) state.lines.push(new Line(path.slice(-3), 'user'));
+        lastInteract = Date.now();
+    };
+    const end = () => isDraw = false;
+
+    canvas.addEventListener('mousedown', start);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', start, {passive:false});
+    canvas.addEventListener('touchmove', (e)=>{e.preventDefault(); move(e)}, {passive:false});
+    canvas.addEventListener('touchend', end);
+
+    const mask = document.getElementById('inputOverlay');
+    const ipt = document.getElementById('userMsgInput');
+    document.getElementById('chatBtn').onclick = () => { mask.classList.add('show'); ipt.focus(); };
+    mask.onclick = (e) => { if(e.target === mask) mask.classList.remove('show'); };
+    const send = () => {
+        const t = ipt.value.trim();
+        if(t) { mask.classList.remove('show'); ipt.value=''; triggerEvent('chat', t); }
+    };
+    document.getElementById('sendBtn').onclick = send;
+    ipt.onkeypress = (e) => { if(e.key === 'Enter') send(); };
+
+// --- 新增：历史记录功能绑定 ---
+    const hBtn = document.getElementById('historyBtn');
+    const hOverlay = document.getElementById('historyOverlay');
+    const hClose = document.getElementById('closeHistory');
+    const hList = document.getElementById('historyList');
+
+    // 打开历史记录
+    hBtn.onclick = () => {
+        hList.innerHTML = ''; // 清空旧列表
+        if (state.sessionLog.length === 0) {
+            hList.innerHTML = '<div style="text-align:center;color:#666;margin-top:20px;">暂无星空对话记录</div>';
+        } else {
+            state.sessionLog.forEach(msg => {
+                const div = document.createElement('div');
+                const isUser = msg.role === 'user';
+                const name = isUser ? (state.charData.userNick || "你") : state.charData.name;
+                
+                div.className = `h-msg ${isUser ? 'user' : 'char'}`;
+                div.innerHTML = `<div class="h-name">${name}</div>${msg.content}`;
+                hList.appendChild(div);
+            });
+            // 滚动到底部
+            setTimeout(() => hList.scrollTop = hList.scrollHeight, 10);
+        }
+        hOverlay.classList.add('show');
+    };
+
+    // 关闭历史记录
+    const closeH = () => hOverlay.classList.remove('show');
+    hClose.onclick = closeH;
+    hOverlay.onclick = (e) => { if(e.target === hOverlay) closeH(); };
+}
+
+function getPos(e) {
+    if(e.touches) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
+    return {x:e.clientX, y:e.clientY};
+}
+
+function showToast(m) {
+    const t = document.getElementById('toast');
+    t.innerText = m; t.style.opacity = 1;
+    setTimeout(()=>t.style.opacity=0, 3000);
+}
+
+init();
+</script>
+</body>
+</html>

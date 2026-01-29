@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Theme Manager</title>
+    <style>
+        /* --- 1. 基础风格 (复用字体App) --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        body {
+            margin: 0; padding: 0; 
+            width: 100%; /* 修改：100%防止溢出 */
+            height: 100vh;
+            background: linear-gradient(180deg, #fff0f5 0%, #ffeef2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #5d5d5d;
+            display: flex; flex-direction: column;
+            overflow: hidden; 
+            overflow-x: hidden; /* 新增：禁止横向滚动 */
+            position: relative;
+        }
+
+        /* --- 2. 顶部导航 --- */
+        .nav-bar {
+            padding: 50px 24px 20px 24px; /* 顶部留白防止遮挡 */
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 10; flex-shrink: 0;
+        }
+        .back-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; box-shadow: 0 4px 12px rgba(255, 182, 193, 0.2);
+            font-size: 18px; color: #888; transition: transform 0.2s;
+        }
+        .back-btn:active { transform: scale(0.9); }
+        
+        /* 右上角保存按钮 */
+        .save-btn-top {
+            padding: 8px 16px; background: #ffb7c5; color: #fff;
+            border-radius: 20px; font-size: 14px; font-weight: 600;
+            box-shadow: 0 4px 12px rgba(255, 182, 193, 0.4); cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .save-btn-top:active { transform: scale(0.95); }
+
+        .page-title { font-size: 18px; font-weight: 600; color: #7a6a6a; letter-spacing: 0.5px; }
+
+        /* --- 3. 内容区域 --- */
+        .content-area {
+            flex: 1; padding: 10px 24px 40px 24px;
+            display: flex; flex-direction: column; gap: 20px;
+            overflow-y: auto; scrollbar-width: none;
+            width: 100%; /* 确保内容不超过父容器 */
+        }
+        .content-area::-webkit-scrollbar { display: none; }
+
+        /* 通用白框 */
+        .white-box {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(255, 182, 193, 0.15), 0 4px 10px rgba(255, 255, 255, 0.5);
+            padding: 20px;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+
+        .section-title {
+            font-size: 14px; color: #aaa; font-weight: 700; 
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* --- 壁纸设置 --- */
+        .wallpaper-row {
+            display: flex; align-items: center; gap: 10px; /* 稍微减小间距以适应小屏 */
+            width: 100%; /* 确保行宽铺满 */
+        }
+        .wp-preview {
+            width: 60px; height: 100px; border-radius: 8px; background: #f0f0f0;
+            background-size: cover; background-position: center;
+            border: 2px solid #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            position: relative; flex-shrink: 0;
+        }
+        .wp-preview.disabled::after {
+            content: "OFF"; position: absolute; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.5); color: #fff; font-size: 12px;
+            display: flex; justify-content: center; align-items: center; border-radius: 6px;
+        }
+        
+        /* 关键修改：添加 min-width:0 防止被撑开 */
+        .wp-controls { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 8px; 
+            min-width: 0; 
+        }
+        
+        .input-group { display: flex; gap: 8px; width: 100%; }
+        
+        /* 关键修改：添加 min-width:0 */
+        .text-input {
+            flex: 1; padding: 8px 12px; border-radius: 12px; border: 1px solid #ffeef2;
+            background: #fffbfd; font-size: 13px; color: #666;
+            min-width: 0; 
+        }
+        .file-label {
+            padding: 8px 12px; background: #ffeef2; color: #ff8fa3;
+            border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+            white-space: nowrap; display: flex; align-items: center;
+            flex-shrink: 0; /* 防止上传按钮文字换行 */
+        }
+        
+        /* 关键修改：添加 flex-shrink:0 */
+        .icon-cross {
+            width: 30px; height: 30px; background: #ffeded; color: #ff6b6b;
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            cursor: pointer; font-weight: bold; font-size: 16px; border: none;
+            flex-shrink: 0; 
+            margin-left: 5px;
+        }
+
+        /* --- 锁屏详情 --- */
+        .setting-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 5px 0;
+        }
+        .setting-label { font-size: 14px; color: #555; font-weight: 500; }
+        .setting-desc { font-size: 12px; color: #999; margin-top: 4px; }
+        
+        .radio-group { display: flex; background: #ffeef2; border-radius: 10px; padding: 3px; }
+        .radio-opt {
+            padding: 6px 12px; font-size: 12px; border-radius: 8px; cursor: pointer;
+            color: #888; transition: all 0.2s;
+        }
+        .radio-opt.active { background: #fff; color: #ffb7c5; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+        /* --- App 图标 --- */
+        .app-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;
+        }
+        .app-item {
+            display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;
+        }
+        .app-icon-display {
+            width: 50px; height: 50px; border-radius: 12px; background: #eee;
+            background-size: cover; background-position: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.2s;
+            position: relative;
+        }
+        .app-item:active .app-icon-display { transform: scale(0.9); }
+        .app-name { font-size: 11px; color: #888; text-align: center; }
+
+        /* --- 预设与外框 --- */
+        .preset-row {
+            display: flex; gap: 10px; align-items: center;
+        }
+        .preset-select {
+            flex: 1; padding: 12px; background: #fff8fa; border: 1px solid #ffeef2;
+            border-radius: 14px; font-size: 14px; color: #555; display: flex; justify-content: space-between;
+        }
+        .btn-mini {
+            width: 40px; height: 40px; border-radius: 12px; border: none;
+            display: flex; justify-content: center; align-items: center; cursor: pointer;
+            flex-shrink: 0; /* 防止按钮被压缩 */
+        }
+        .btn-mini.save { background: #fff0f5; color: #ffb7c5; }
+        .btn-mini.del { background: #fff5f5; color: #ff8888; }
+
+        /* 开关 Switch */
+        .toggle-switch {
+            width: 50px; height: 28px; background: #eee; border-radius: 30px;
+            position: relative; cursor: pointer; transition: 0.3s;
+        }
+        .toggle-switch.active { background: #ffb7c5; }
+        .toggle-switch::after {
+            content: ''; position: absolute; left: 2px; top: 2px;
+            width: 24px; height: 24px; background: #fff; border-radius: 50%;
+            transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .toggle-switch.active::after { transform: translateX(22px); }
+
+        /* --- 弹窗 (复用) --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.2); backdrop-filter: blur(5px);
+            z-index: 1000; display: none; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .modal-overlay.show { opacity: 1; }
+        .modal-box {
+            width: 300px; background: #fff; border-radius: 24px; padding: 25px;
+            box-shadow: 0 10px 40px rgba(255, 182, 193, 0.4);
+            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        .modal-overlay.show .modal-box { transform: scale(1); }
+        .modal-title { font-size: 16px; font-weight: 700; color: #444; text-align: center; margin-bottom: 5px; }
+        .modal-btns { display: flex; gap: 12px; margin-top: 10px; }
+        .modal-btn { flex: 1; padding: 12px; border-radius: 14px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .btn-cancel { background: #f2f2f2; color: #888; }
+        .btn-confirm { background: #ffb7c5; color: #fff; box-shadow: 0 4px 10px rgba(255, 183, 197, 0.3); }
+
+        .preset-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+        .preset-item { padding: 12px; background: #f9f9f9; border-radius: 10px; font-size: 14px; cursor: pointer; }
+        .preset-item.active { background: #fff0f5; color: #ffb7c5; font-weight: bold; }
+        
+        /* Toast */
+        .toast {
+            position: fixed; top: 80px; left: 50%; transform: translateX(-50%) scale(0.9); opacity: 0;
+            background: rgba(255,255,255,0.95); padding: 10px 20px; border-radius: 30px;
+            box-shadow: 0 5px 20px rgba(255, 182, 193, 0.3); font-size: 13px; color: #555;
+            transition: all 0.3s; z-index: 2000; pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) scale(1); opacity: 1; }
+
+        /* 新增：重置按钮样式 */
+        .btn-reset-block {
+            background: #fff5f5; color: #ff6b6b; font-weight: 600;
+            border-radius: 16px; padding: 15px; text-align: center; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(255, 107, 107, 0.1);
+            border: 1px solid #ffecec; transition: 0.2s;
+        }
+        .btn-reset-block:active { background: #ffe0e0; transform: scale(0.98); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <div class="back-btn" onclick="closeApp()">←</div>
+        <div class="page-title">主题美化</div>
+        <!-- 右上角：应用/保存到手机 -->
+        <div class="save-btn-top" onclick="applyToPhone()">保存应用</div>
+    </div>
+
+    <div class="content-area">
+        
+        <!-- 1. 壁纸设置 -->
+        <div class="white-box">
+            <div class="section-title">Wallpapers</div>
+            
+            <!-- 桌面壁纸 -->
+            <div class="wallpaper-row">
+                <div class="wp-preview" id="previewHome" style="background-image: url('')"></div>
+                <div class="wp-controls">
+                    <div style="font-size:13px; font-weight:600;">桌面壁纸</div>
+                    <div class="input-group">
+                        <input type="text" class="text-input" id="inputHomeUrl" placeholder="输入图片链接..." onchange="updatePreview('Home', this.value)">
+                        <label class="file-label">
+                            上传
+                            <input type="file" hidden accept="image/*" onchange="handleFile(this, 'Home')">
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div style="height:1px; background:#ffeef2; margin: 5px 0;"></div>
+
+            <!-- 锁屏壁纸 -->
+            <div class="wallpaper-row">
+                <div class="wp-preview" id="previewLock"></div>
+                <div class="wp-controls">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="font-size:13px; font-weight:600;">锁屏壁纸</span>
+                    </div>
+                    <div class="input-group">
+                        <input type="text" class="text-input" id="inputLockUrl" placeholder="输入图片链接..." onchange="updatePreview('Lock', this.value)">
+                        <label class="file-label">
+                            上传
+                            <input type="file" hidden accept="image/*" onchange="handleFile(this, 'Lock')">
+                        </label>
+                    </div>
+                </div>
+                <!-- 禁用锁屏按钮 -->
+                <button class="icon-cross" onclick="toggleLockScreen()">×</button>
+            </div>
+        </div>
+
+        <!-- 2. 锁屏详细设置 -->
+        <div class="white-box" id="lockSettingsBox">
+            <div class="section-title">Lock Screen Info</div>
+            
+            <div class="setting-item">
+                <span class="setting-label">密码位数</span>
+                <div class="radio-group">
+                    <div class="radio-opt active" id="pwd4" onclick="setPwdLen(4)">4位</div>
+                    <div class="radio-opt" id="pwd6" onclick="setPwdLen(6)">6位</div>
+                </div>
+            </div>
+            
+            <div class="setting-item">
+                <span class="setting-label">锁屏密码</span>
+                <input type="number" id="inputPwd" class="text-input" style="width: 100px; text-align:center; flex:none;" placeholder="1234">
+            </div>
+
+            <div class="setting-item">
+        <span class="setting-label">文字颜色</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <!-- 颜色选择器 -->
+            <input type="color" id="inputLockColorPicker" style="width:30px; height:30px; padding:0; border:none; background:none; cursor:pointer;" onchange="updateLockColor(this.value)">
+            <!-- 颜色代码输入框 -->
+            <input type="text" id="inputLockColorText" class="text-input" style="width:80px; text-align:center; padding:4px;" placeholder="#ffffff" onchange="updateLockColor(this.value)">
+        </div>
+    </div>
+
+            <div class="setting-item" style="flex-direction: column; align-items: flex-start;">
+                <span class="setting-label">个性化文案</span>
+                <div class="setting-desc">输入名字，自动生成 "xxx of Buzzy Phone"</div>
+                <div style="display: flex; align-items: center; width: 100%; margin-top: 8px; gap: 5px;">
+                    <input type="text" id="inputText" class="text-input" placeholder="请输入昵称">
+                    <!-- 预览后缀 -->
+                    <span style="font-size: 13px; color: #aaa; flex-shrink: 0; transform: translateY(1px);">of Buzzy Phone</span>
+                </div>
+                <div class="setting-desc" style="color:#ffb7c5; margin-top:4px;">* 显示在日期左下方</div>
+            </div>
+        </div>
+
+        <!-- 3. App图标 -->
+        <div class="white-box">
+            <div class="section-title">App Icons</div>
+            <div class="app-grid" id="appGrid">
+                <!-- 由 JS 生成图标列表 -->
+            </div>
+        </div>
+
+        <!-- 3.5 消息提示音 (新加的) -->
+        <div class="white-box">
+            <div class="section-title">Notification Sound</div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="font-size:13px; font-weight:600;">消息提示音</div>
+                <div class="input-group">
+                    <input type="text" class="text-input" id="inputMsgSound" placeholder="粘贴音频链接 (mp3/wav)..." onchange="updateMsgSound(this.value)">
+                    <!-- 试听按钮 -->
+                    <button class="btn-mini save" style="width:50px;" onclick="previewMsgSound()">▶</button>
+                </div>
+                <div class="setting-desc">当角色在后台回复消息时播放</div>
+            </div>
+        </div>
+        
+        <!-- 4. 预设 & 外框 -->
+        <div class="white-box">
+            <div class="section-title">System</div>
+            
+            <!-- 手机外框开关 -->
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">手机外框</div>
+                    <div class="setting-desc">简约可爱的边框包裹效果</div>
+                </div>
+                <div class="toggle-switch" id="frameToggle" onclick="toggleFrame()"></div>
+            </div>
+
+            <div style="height:1px; background:#ffeef2; margin: 10px 0;"></div>
+
+            <!-- 预设管理 -->
+            <div class="setting-label" style="margin-bottom:8px;">预设管理</div>
+            <div class="preset-row">
+                <div class="preset-select" onclick="openPresetList()">
+                    <span id="currentPresetName">默认预设</span>
+                    <span style="font-size:10px; color:#ccc;">▼</span>
+                </div>
+                <button class="btn-mini save" onclick="openSavePresetModal()">💾</button>
+                <button class="btn-mini del" onclick="deletePreset()">🗑️</button>
+            </div>
+        </div>
+
+        <!-- 5. 初始化按钮 (新加的) -->
+        <div class="btn-reset-block" onclick="openResetModal()">
+            初始化外观
+            <div style="font-size:11px; font-weight:400; opacity:0.7; margin-top:4px;">重置所有美化设置与密码</div>
+        </div>
+    </div>
+
+    <!-- 弹窗：图标修改 -->
+    <div class="modal-overlay" id="modal-icon">
+        <div class="modal-box">
+            <div class="modal-title">修改图标</div>
+            <div style="text-align:center; margin-bottom:10px; font-size:13px; color:#888;" id="editingAppName">App Name</div>
+            <input type="text" id="iconUrlInput" class="text-input" placeholder="粘贴图片链接..." onchange="previewIcon(this.value)">
+            <div style="display:flex; justify-content:center; margin: 10px 0;">
+                <div id="iconPreviewBig" style="width:60px; height:60px; border-radius:15px; background:#eee; background-size:cover;"></div>
+            </div>
+            <label class="file-label" style="text-align:center; display:block;">
+                从相册上传
+                <input type="file" hidden accept="image/*" onchange="handleIconFile(this)">
+            </label>
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal('modal-icon')">取消</button>
+                <button class="modal-btn btn-confirm" onclick="confirmIconChange()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：保存预设 -->
+    <div class="modal-overlay" id="modal-save">
+        <div class="modal-box">
+            <div class="modal-title">保存新预设</div>
+            <input type="text" id="presetNameInput" class="text-input" placeholder="输入预设名称..." style="text-align:center;">
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal('modal-save')">取消</button>
+                <button class="modal-btn btn-confirm" onclick="confirmSavePreset()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：选择预设 -->
+    <div class="modal-overlay" id="modal-list">
+        <div class="modal-box">
+            <div class="modal-title">选择预设</div>
+            <div class="preset-list" id="presetListContainer"></div>
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal('modal-list')">关闭</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 弹窗：删除确认 -->
+    <div class="modal-overlay" id="modal-del">
+        <div class="modal-box">
+            <div class="modal-title">删除预设</div>
+            <div style="text-align:center; font-size:14px; color:#666;">确定要删除当前预设吗？此操作无法撤销。</div>
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal('modal-del')">取消</button>
+                <button class="modal-btn btn-confirm" onclick="confirmDeletePreset()" style="background:#ff8888;">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：初始化确认 (新加的) -->
+    <div class="modal-overlay" id="modal-reset">
+        <div class="modal-box">
+            <div class="modal-title" style="color:#ff6b6b;">警告</div>
+            <div style="text-align:center; font-size:14px; color:#666; line-height:1.5;">
+                确定要初始化所有外观设置吗？<br>
+                所有图标、壁纸和密码将恢复默认。<br>
+                <b>此操作不可撤销。</b>
+            </div>
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal('modal-reset')">取消</button>
+                <button class="modal-btn btn-confirm" onclick="confirmReset()" style="background:#ff6b6b;">确认初始化</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">操作成功</div>
+
+    <script>
+        async function dbGet(key) {
+            return await localforage.getItem(key);
+        }
+        async function dbSet(key, val) {
+            return await localforage.setItem(key, val);
+        }
+        // --- 数据结构 ---
+        const DEFAULT_THEME = {
+            id: 'default',
+            msgSound: '', // 消息提示音URL
+            name: '默认预设',
+            homeWp: '', // 默认空或指定URL
+            lockWp: '',
+            lockEnabled: true,
+            lockTextColor: '#ffffff', // <--- 【新增这行：默认白色】
+            pwdLen: 4,
+            pwd: '1234',
+            customText: '',
+            frameEnabled: false,
+            icons: {
+                'phone': 'https://cdn-icons-png.flaticon.com/512/724/724664.png',
+                'message': 'https://cdn-icons-png.flaticon.com/512/1384/1384090.png',
+                'camera': 'https://cdn-icons-png.flaticon.com/512/4066/4066427.png',
+                'settings': 'https://cdn-icons-png.flaticon.com/512/3019/3019014.png',
+                'photos': 'https://cdn-icons-png.flaticon.com/512/3342/3342137.png',
+                'browser': 'https://cdn-icons-png.flaticon.com/512/3065/3065849.png'
+            }
+        };
+
+        // 尝试从存储中读取 index.html 注册过的 APP 列表
+        let APPS_LIST = [
+            { id: 'phone', name: '电话' },
+            { id: 'message', name: '信息' }
+        ];
+
+        let currentTheme = JSON.parse(JSON.stringify(DEFAULT_THEME));
+        let presets = [JSON.parse(JSON.stringify(DEFAULT_THEME))];
+        let editingAppId = null;
+
+        // --- 新增：图片压缩工具 ---
+// 帮你把大图片偷偷压扁，模拟 URL 的轻量级效果
+function compressImage(file, maxWidth, quality, callback) {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = function(event) {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = function() {
+            let width = img.width;
+            let height = img.height;
+            
+            // 如果图片太宽，等比例缩小
+            if (width > maxWidth) {
+                height = Math.round(height * (maxWidth / width));
+                width = maxWidth;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // 转换为压缩后的 Base64 (image/jpeg 格式体积最小)
+            // quality: 0.1-1.0，数字越小越模糊但体积越小
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            callback(dataUrl);
+        }
+    }
+}
+
+        // 初始化
+        window.onload = async function() {
+            try {
+                // 1. 读取 App 列表
+                const savedApps = await dbGet('buzzy_installed_apps');
+                if (savedApps) {
+                    APPS_LIST = (typeof savedApps === 'string') ? JSON.parse(savedApps) : savedApps;
+                }
+                
+                // 2. 读取预设
+                const savedPresets = await dbGet('buzzy_presets');
+                if(savedPresets) {
+                    presets = (typeof savedPresets === 'string') ? JSON.parse(savedPresets) : savedPresets;
+                }
+
+                // 3. 读取当前主题
+                const savedActive = await dbGet('buzzy_active_theme');
+                if(savedActive) {
+                    currentTheme = (typeof savedActive === 'string') ? JSON.parse(savedActive) : savedActive;
+                } else {
+                    currentTheme = presets[0];
+                }
+
+                // 【关键修复】给数据做体检，防止旧数据缺少字段导致崩坏
+                fixThemeData(currentTheme);
+                presets.forEach(p => fixThemeData(p));
+
+                renderUI();
+            } catch (err) {
+                console.error("初始化失败:", err);
+                alert("数据读取出错，已重置为默认主题以恢复功能。");
+                // 兜底策略：出错就重置，保证能用
+                currentTheme = JSON.parse(JSON.stringify(DEFAULT_THEME));
+                renderUI();
+            }
+        };
+
+        // 【新增】数据修复函数：缺什么补什么
+        function fixThemeData(theme) {
+            if (!theme) return;
+            // 补全基础字段
+            theme.homeWp = theme.homeWp || '';
+            theme.lockWp = theme.lockWp || '';
+            theme.lockEnabled = (theme.lockEnabled !== undefined) ? theme.lockEnabled : true;
+            theme.pwdLen = theme.pwdLen || 4;
+            theme.pwd = theme.pwd || '1234';
+            theme.customText = theme.customText || '';
+            theme.lockTextColor = theme.lockTextColor || '#ffffff';
+            theme.msgSound = theme.msgSound || '';
+            theme.frameEnabled = (theme.frameEnabled !== undefined) ? theme.frameEnabled : false;
+            
+            // 补全图标对象
+            if (!theme.icons) theme.icons = {};
+            // 确保每个APP都有图标，没有就用默认
+            APPS_LIST.forEach(app => {
+                if (!theme.icons[app.id]) {
+                    theme.icons[app.id] = DEFAULT_THEME.icons[app.id] || '';
+                }
+            });
+        }
+
+        function closeApp() {
+            if (window.parent && window.parent.closeApp) window.parent.closeApp();
+            else history.back();
+        }
+
+        // --- 渲染逻辑 ---
+        function renderUI() {
+            // 1. 壁纸
+            document.getElementById('inputHomeUrl').value = currentTheme.homeWp.startsWith('data') ? '' : currentTheme.homeWp;
+            document.getElementById('previewHome').style.backgroundImage = `url(${currentTheme.homeWp})`;
+
+            const lockPreview = document.getElementById('previewLock');
+            const lockBox = document.getElementById('lockSettingsBox');
+            
+            if (currentTheme.lockEnabled) {
+                lockPreview.classList.remove('disabled');
+                lockPreview.style.backgroundImage = `url(${currentTheme.lockWp})`;
+                document.getElementById('inputLockUrl').value = currentTheme.lockWp.startsWith('data') ? '' : currentTheme.lockWp;
+                lockBox.style.opacity = '1';
+                lockBox.style.pointerEvents = 'auto';
+            } else {
+                lockPreview.classList.add('disabled');
+                lockPreview.style.backgroundImage = 'none';
+                lockBox.style.opacity = '0.5';
+                lockBox.style.pointerEvents = 'none';
+            }
+
+            // 2. 锁屏信息
+            setPwdLen(currentTheme.pwdLen, false); 
+            document.getElementById('inputPwd').value = currentTheme.pwd;
+            document.getElementById('inputText').value = currentTheme.customText;
+
+            const textColor = currentTheme.lockTextColor || '#ffffff';
+    document.getElementById('inputLockColorPicker').value = textColor;
+    document.getElementById('inputLockColorText').value = textColor;
+
+            // 3. 图标
+            const grid = document.getElementById('appGrid');
+            grid.innerHTML = '';
+            APPS_LIST.forEach(app => {
+                const url = currentTheme.icons[app.id] || DEFAULT_THEME.icons[app.id];
+                const item = document.createElement('div');
+                item.className = 'app-item';
+                item.onclick = () => openIconEditor(app.id, app.name, url);
+                item.innerHTML = `
+                    <div class="app-icon-display" style="background-image: url('${url}')"></div>
+                    <div class="app-name">${app.name}</div>
+                `;
+                grid.appendChild(item);
+            });
+
+            // 4. 外框与预设名
+            const frameSwitch = document.getElementById('frameToggle');
+            if(currentTheme.frameEnabled) frameSwitch.classList.add('active');
+            else frameSwitch.classList.remove('active');
+
+            document.getElementById('currentPresetName').innerText = currentTheme.name;
+            document.getElementById('inputMsgSound').value = currentTheme.msgSound || '';
+        }
+
+        // --- 功能逻辑 ---
+
+        function updatePreview(type, url) {
+            if(type === 'Home') {
+                currentTheme.homeWp = url;
+            } else {
+                currentTheme.lockWp = url;
+                currentTheme.lockEnabled = true; 
+            }
+            renderUI();
+        }
+
+        function handleFile(input, type) {
+    const file = input.files[0];
+    if(!file) return;
+
+    showToast('正在处理图片...'); // 提示用户稍微等一下
+
+    // 壁纸不需要4K高清，宽720px，0.6质量足够手机看，体积能缩几十倍
+    compressImage(file, 1080, 0.8, function(compressedUrl) {
+        if(type === 'Home') currentTheme.homeWp = compressedUrl;
+        else {
+            currentTheme.lockWp = compressedUrl;
+            currentTheme.lockEnabled = true;
+        }
+        renderUI();
+        showToast('图片添加成功');
+    });
+    
+    input.value = '';
+}
+
+        function toggleLockScreen() {
+            currentTheme.lockEnabled = !currentTheme.lockEnabled;
+            renderUI();
+        }
+
+        function setPwdLen(len, updateModel = true) {
+            if(updateModel) currentTheme.pwdLen = len;
+            document.getElementById('pwd4').className = len === 4 ? 'radio-opt active' : 'radio-opt';
+            document.getElementById('pwd6').className = len === 6 ? 'radio-opt active' : 'radio-opt';
+            const input = document.getElementById('inputPwd');
+            input.setAttribute('oninput', `if(value.length>${len})value=value.slice(0,${len})`);
+        }
+
+        function updateLockColor(val) {
+    // 简单的格式校验，如果没有#号且是hex代码，这里简单处理，或者直接赋值
+    if(!val.startsWith('#')) val = '#' + val; 
+    
+    currentTheme.lockTextColor = val;
+    // 同步两个输入框显示
+    document.getElementById('inputLockColorPicker').value = val;
+    document.getElementById('inputLockColorText').value = val;
+}
+
+        let tempIconUrl = '';
+        function openIconEditor(id, name, url) {
+            editingAppId = id;
+            document.getElementById('editingAppName').innerText = `正在修改: ${name}`;
+            document.getElementById('iconUrlInput').value = '';
+            tempIconUrl = url;
+            document.getElementById('iconPreviewBig').style.backgroundImage = `url(${url})`;
+            openModal('modal-icon');
+        }
+
+        function previewIcon(url) {
+            tempIconUrl = url;
+            document.getElementById('iconPreviewBig').style.backgroundImage = `url(${url})`;
+        }
+
+        function handleIconFile(input) {
+    const file = input.files[0];
+    if(!file) return;
+
+    showToast('正在处理图标...');
+
+    // 图标非常小，只需要宽150px即可，质量0.7
+    compressImage(file, 150, 0.7, function(compressedUrl) {
+        previewIcon(compressedUrl);
+        showToast('图标已加载');
+    });
+    
+    input.value = ''; // 清空输入框，防止重复上传不触发
+}
+
+        function confirmIconChange() {
+            if(editingAppId) {
+                currentTheme.icons[editingAppId] = tempIconUrl;
+                renderUI();
+            }
+            closeModal('modal-icon');
+        }
+
+        function toggleFrame() {
+            currentTheme.frameEnabled = !currentTheme.frameEnabled;
+            renderUI();
+        }
+
+        // --- 预设管理 ---
+
+        function openPresetList() {
+            const container = document.getElementById('presetListContainer');
+            container.innerHTML = '';
+            presets.forEach(p => {
+                const div = document.createElement('div');
+                div.className = `preset-item ${currentTheme.id === p.id ? 'active' : ''}`;
+                div.innerHTML = p.name;
+                div.onclick = () => {
+                    currentTheme = JSON.parse(JSON.stringify(p)); 
+                    renderUI();
+                    closeModal('modal-list');
+                };
+                container.appendChild(div);
+            });
+            openModal('modal-list');
+        }
+
+        function openSavePresetModal() { openModal('modal-save'); }
+
+        function confirmSavePreset() {
+            const name = document.getElementById('presetNameInput').value.trim() || '未命名预设';
+            syncInputsToModel();
+            const newId = Date.now().toString();
+            currentTheme.id = newId;
+            currentTheme.name = name;
+            presets.push(JSON.parse(JSON.stringify(currentTheme)));
+            savePresetsToStorage();
+            renderUI();
+            closeModal('modal-save');
+            showToast('预设已保存');
+        }
+
+        function deletePreset() {
+            if(currentTheme.id === 'default') {
+                showToast('默认预设不能删除');
+                return;
+            }
+            openModal('modal-del');
+        }
+
+        function confirmDeletePreset() {
+            presets = presets.filter(p => p.id !== currentTheme.id);
+            currentTheme = JSON.parse(JSON.stringify(presets[0]));
+            savePresetsToStorage();
+            renderUI();
+            closeModal('modal-del');
+            showToast('预设已删除');
+        }
+
+        async function savePresetsToStorage() {
+            try {
+                await dbSet('buzzy_presets', presets);
+            } catch (e) {
+                // 如果存不进去了，提示用户
+                alert("保存失败：存储空间已满！\n请删除一些不用的预设，或者减少图片的数量。");
+                console.error(e);
+            }
+        }
+
+        // --- 消息提示音逻辑 ---
+        function updateMsgSound(val) {
+            currentTheme.msgSound = val.trim();
+        }
+
+        function previewMsgSound() {
+            const url = document.getElementById('inputMsgSound').value;
+            if(!url) {
+                showToast('请先输入链接');
+                return;
+            }
+            const audio = new Audio(url);
+            audio.volume = 0.5; // 音量适中
+            audio.play().catch(e => showToast('无法播放，请检查链接'));
+        }
+
+        // --- 初始化功能 (新) ---
+        function openResetModal() { openModal('modal-reset'); }
+
+        async function confirmReset() {
+            // 恢复默认
+            currentTheme = JSON.parse(JSON.stringify(DEFAULT_THEME));
+            // 初始化通常能成功，因为是存很小的数据，所以这里不用加复杂的保险
+            await dbSet('buzzy_active_theme', currentTheme);
+
+            new BroadcastChannel('buzzy_sync_channel').postMessage({ type: 'theme_update' });
+            
+            if(window.parent && window.parent.reloadTheme) {
+                window.parent.reloadTheme();
+            }
+            renderUI();
+            closeModal('modal-reset');
+            showToast('已恢复初始化');
+        }
+
+        // --- 保存应用 ---
+        async function applyToPhone() {
+            syncInputsToModel();
+            try {
+                await dbSet('buzzy_active_theme', currentTheme);
+                new BroadcastChannel('buzzy_sync_channel').postMessage({ type: 'theme_update' });
+                if(window.parent && window.parent.reloadTheme) {
+                    window.parent.reloadTheme();
+                }
+                showToast('美化已应用！');
+            } catch (e) {
+                // 如果应用失败，提示用户
+                alert("应用失败：图片太大导致浏览器拒绝保存。\n\n建议：\n1. 刚才的图片已自动压缩，请尝试再次点击保存。\n2. 如果还不行，请删除一些复杂的预设腾出空间。");
+            }
+        }
+
+        function syncInputsToModel() {
+            currentTheme.pwd = document.getElementById('inputPwd').value;
+            currentTheme.customText = document.getElementById('inputText').value;
+        }
+
+        function openModal(id) { 
+            const el = document.getElementById(id); 
+            el.style.display='flex'; 
+            setTimeout(()=>el.classList.add('show'),10); 
+        }
+        function closeModal(id) { 
+            const el = document.getElementById(id); 
+            el.classList.remove('show'); 
+            setTimeout(()=>el.style.display='none',300); 
+        }
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+    </script>
+</body>
+</html>

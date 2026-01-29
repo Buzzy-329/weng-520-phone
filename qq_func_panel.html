@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Func Panel</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; user-select: none; }
+        body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0);
+            display: flex; flex-direction: column; justify-content: flex-end;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            overflow: hidden;
+        }
+        .mask-area { flex: 1; width: 100%; }
+
+        /* 面板主体：竖向长方形，极简风格 */
+        .panel-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            margin: 0 20px 95px 20px; /* 悬浮在输入框上方 */
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+            animation: slideUp 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+            
+            /* 网格布局：一行两个 */
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        @keyframes slideUp { 
+            from { transform: translateY(30px); opacity: 0; } 
+            to { transform: translateY(0); opacity: 1; } 
+        }
+
+        /* 单个功能按钮 */
+        .func-btn {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: #fff;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            border: 1px solid rgba(0,0,0,0.02);
+        }
+        .func-btn:active {
+            transform: scale(0.96);
+            background: #f5f5f7;
+        }
+
+        /* 图标容器 */
+        .icon-box {
+            width: 28px; height: 28px;
+            display: flex; justify-content: center; align-items: center;
+            margin-right: 10px;
+        }
+        .icon-svg {
+            width: 20px; height: 20px;
+            stroke: #333; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+        }
+
+        /* 文字 */
+        .btn-text {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        
+        /* 特殊颜色微调 */
+        .t-pink .icon-svg { stroke: #FF6B81; }
+        .t-blue .icon-svg { stroke: #007AFF; }
+        .t-purple .icon-svg { stroke: #9D50BB; }
+        .t-orange .icon-svg { stroke: #FF9F43; }
+        .t-green .icon-svg { stroke: #26de81; }
+        .t-yellow .icon-svg { stroke: #f1c40f; }
+
+    </style>
+</head>
+<body>
+    <div class="mask-area" onclick="closePanel()"></div>
+
+    <div class="panel-content">
+        <!-- 1. 重说 -->
+        <div class="func-btn" onclick="trigger('regenerate')">
+            <div class="icon-box t-blue">
+                <svg class="icon-svg" viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            </div>
+            <div class="btn-text">重说</div>
+        </div>
+
+        <!-- 2. 推进 -->
+        <div class="func-btn" onclick="trigger('advance')">
+            <div class="icon-box t-purple">
+                <svg class="icon-svg" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </div>
+            <div class="btn-text">推进</div>
+        </div>
+
+        <!-- 3. 转账 -->
+        <div class="func-btn" onclick="trigger('transfer')">
+            <div class="icon-box t-orange">
+                <svg class="icon-svg" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+            </div>
+            <div class="btn-text">转账</div>
+        </div>
+
+        <!-- 4. 语音 -->
+        <div class="func-btn" onclick="trigger('voice')">
+            <div class="icon-box t-pink">
+                <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </div>
+            <div class="btn-text">语音</div>
+        </div>
+
+        <!-- 5. 图片 -->
+        <div class="func-btn" onclick="trigger('image')">
+            <div class="icon-box t-green">
+                <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            </div>
+            <div class="btn-text">图片</div>
+        </div>
+
+        <!-- 6. 表情 (新增) -->
+        <div class="func-btn" onclick="trigger('emoticon')">
+            <div class="icon-box t-yellow">
+                <!-- 一个笑脸图标 -->
+                <svg class="icon-svg" viewBox="0 0 24 24" style="stroke:#f1c40f"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+            </div>
+            <div class="btn-text">表情</div>
+        </div>
+    </div>
+
+    <script>
+        function closePanel() {
+            if (window.parent && window.parent.closeFuncFrame) {
+                window.parent.closeFuncFrame();
+            }
+        }
+        function trigger(type) {
+            // 将点击事件传递给父窗口 (chat_window.html)
+            if (window.parent && window.parent.handleFuncAction) {
+                window.parent.handleFuncAction(type);
+                closePanel();
+            } else {
+                alert('功能: ' + type);
+            }
+        }
+    </script>
+</body>
+</html>

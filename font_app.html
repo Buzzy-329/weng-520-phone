@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Font Manager</title>
+    <style>
+        /* --- 核心修改：所有单位换成 rem --- */
+        
+        /* 1. 基础风格 */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        :root {
+            /* 默认基准大小，会被JS动态修改 */
+            font-size: 16px; 
+        }
+
+        body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(180deg, #fff0f5 0%, #ffeef2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            color: #5d5d5d;
+            display: flex; flex-direction: column;
+            overflow: hidden; position: relative;
+            /* 这里的 font-size 1rem 会继承 html 的大小 */
+            font-size: 1rem; 
+        }
+
+        /* 2. 顶部导航 */
+        .nav-bar {
+            padding: 3.125rem 1.5rem 1.25rem 1.5rem; /* 50px 24px 20px */
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 10; flex-shrink: 0;
+        }
+        .back-btn {
+            width: 2.5rem; height: 2.5rem; /* 40px */
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; box-shadow: 0 0.25rem 0.75rem rgba(255, 182, 193, 0.2);
+            font-size: 1.125rem; /* 18px */
+            color: #888; transition: transform 0.2s;
+        }
+        .back-btn:active { transform: scale(0.9); }
+        .page-title { font-size: 1.125rem; font-weight: 600; color: #7a6a6a; letter-spacing: 0.5px; } /* 18px */
+        .right-placeholder { width: 2.5rem; }
+
+        /* 3. 内容区域 */
+        .content-area {
+            flex: 1; padding: 0.625rem 1.5rem; /* 10px 24px */
+            display: flex; flex-direction: column; gap: 1.5rem; /* 25px */
+            overflow-y: auto; scrollbar-width: none;
+        }
+        .content-area::-webkit-scrollbar { display: none; }
+
+        /* 通用白框 */
+        .white-box {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 1.5rem; /* 24px */
+            box-shadow: 0 0.625rem 1.875rem rgba(255, 182, 193, 0.15), 0 0.25rem 0.625rem rgba(255, 255, 255, 0.5);
+            padding: 1.25rem; /* 20px */
+            display: flex; flex-direction: column; gap: 0.93rem; /* 15px */
+            transition: transform 0.2s;
+        }
+
+        /* 上半部分：操作区 */
+        .control-box { margin-top: 0.625rem; }
+
+        .btn-add {
+            width: 100%; padding: 1rem; /* 16px */
+            background: linear-gradient(135deg, #ffb7c5 0%, #ffc4d0 100%);
+            color: #fff; border: none; border-radius: 1.125rem; /* 18px */
+            font-size: 0.94rem; /* 15px */
+            font-weight: 600; letter-spacing: 1px;
+            cursor: pointer; box-shadow: 0 0.3rem 0.9rem rgba(255, 183, 197, 0.4);
+            display: flex; justify-content: center; align-items: center; gap: 0.5rem;
+        }
+        .btn-add:active { transform: scale(0.98); background: #ff9eb0; }
+
+        .action-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+        }
+
+        /* 选择字体条 */
+        .font-selector {
+            flex: 1; height: 3.125rem; /* 50px */
+            background: #fff8fa; border: 1px solid #ffeef2;
+            border-radius: 1rem; /* 16px */
+            padding: 0 0.93rem;
+            display: flex; align-items: center; justify-content: space-between;
+            color: #666; font-size: 0.875rem; /* 14px */
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .font-selector:active { background: #fff0f5; }
+        .caret { font-size: 0.625rem; color: #ccc; }
+
+        /* 小按钮 */
+        .icon-btn {
+            width: 3.125rem; height: 3.125rem; flex-shrink: 0; /* 50px */
+            border-radius: 1rem; border: none; cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.125rem; transition: transform 0.2s;
+        }
+        .icon-btn:active { transform: scale(0.9); }
+        .btn-save { background: #fff; color: #ffb7c5; box-shadow: 0 0.2rem 0.625rem rgba(0,0,0,0.05); border: 1px solid #fff0f5; }
+        .btn-delete { background: #fff5f5; color: #ff8888; border: 1px solid #ffebeb; }
+
+        /* 字体大小滑块样式 */
+        .size-box {
+            flex-direction: row; align-items: center; justify-content: space-between;
+            padding: 0.93rem 1.25rem;
+        }
+        .size-icon { font-weight: bold; color: #ffb7c5; user-select: none; }
+        .size-icon.small { font-size: 0.75rem; opacity: 0.6; } /* 12px */
+        .size-icon.big { font-size: 1.375rem; } /* 22px */
+        
+        .slider-container {
+            flex: 1; margin: 0 0.93rem; position: relative;
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 0.375rem; /* 6px */
+            background: #ffeef2; border-radius: 0.625rem; border: 1px solid #fff0f5;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 1.375rem; width: 1.375rem; border-radius: 50%; /* 22px */
+            background: #fff; border: 2px solid #ffb7c5;
+            margin-top: -0.56rem; /* -9px */
+            box-shadow: 0 0.125rem 0.375rem rgba(255, 183, 197, 0.4);
+            transition: transform 0.1s;
+        }
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.2); background: #ffb7c5; border-color: #fff;
+        }
+        
+        .slider-value {
+            font-size: 0.625rem; color: #aaa; margin-top: 0.25rem; font-weight: 500;
+            background: #fff5f8; padding: 0.125rem 0.5rem; border-radius: 0.5rem;
+        }
+
+        /* 下半部分：预览区 */
+        .preview-box {
+            min-height: 11.25rem; /* 180px */
+            justify-content: center; align-items: center; text-align: center;
+            position: relative;
+        }
+        .preview-label {
+            position: absolute; top: 0.93rem; left: 1.25rem;
+            font-size: 0.6875rem; color: #ddd; letter-spacing: 1px; text-transform: uppercase; font-weight: 700;
+        }
+        .demo-text-wrap {
+            display: flex; flex-direction: column; gap: 0.75rem; width: 100%; padding: 0.625rem 0;
+            transition: font-size 0.1s; 
+        }
+        .demo-cn { font-size: 1.625em; color: #444; line-height: 1.4; } 
+        .demo-en { font-size: 1em; color: #999; font-style: italic; }
+
+        /* 4. 弹窗 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.2); backdrop-filter: blur(5px);
+            z-index: 1000; display: none; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .modal-overlay.show { opacity: 1; }
+        .modal-box {
+            width: 18.75rem; /* 300px */
+            background: #fff; border-radius: 1.5rem; padding: 1.56rem; /* 25px */
+            box-shadow: 0 0.625rem 2.5rem rgba(255, 182, 193, 0.4), 0 0 1.25rem rgba(255, 192, 203, 0.8);
+            border: 1px solid rgba(255, 228, 225, 0.8);
+            display: flex; flex-direction: column; gap: 1.25rem;
+            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .modal-overlay.show .modal-box { transform: scale(1); }
+        .modal-title { font-size: 1rem; font-weight: 700; color: #444; text-align: center; } /* 16px */
+        .modal-input {
+            width: 100%; padding: 0.875rem; /* 14px */
+            border: 1px solid #ffeef2; background: #fffbfd;
+            border-radius: 0.875rem; font-size: 0.875rem; 
+            outline: none; text-align: center; color: #555;
+        }
+        .modal-input:focus { background: #fff; border-color: #ffb7c5; }
+        .modal-btns { display: flex; gap: 0.75rem; }
+        .modal-btn {
+            flex: 1; padding: 0.75rem; border-radius: 0.875rem; border: none;
+            font-size: 0.875rem; font-weight: 600; cursor: pointer;
+        }
+        .btn-cancel { background: #f2f2f2; color: #888; }
+        .btn-confirm { background: #ffb7c5; color: #fff; box-shadow: 0 0.25rem 0.625rem rgba(255, 183, 197, 0.3); }
+
+        /* 列表样式 */
+        .preset-list { max-height: 15.6rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
+        .preset-list::-webkit-scrollbar { display: none; }
+        .preset-item {
+            padding: 0.875rem; background: #f9f9f9; border-radius: 0.875rem;
+            font-size: 0.875rem; color: #555; cursor: pointer; transition: all 0.2s;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .preset-item:active { transform: scale(0.98); }
+        .preset-item.active { background: #fff0f5; color: #ffb7c5; font-weight: bold; border: 1px solid #ffb7c5; }
+
+        .toast {
+            position: fixed; top: 1.25rem; left: 50%; transform: translateX(-50%) translateY(-6rem);
+            background: rgba(255,255,255,0.95); padding: 0.75rem 1.56rem; border-radius: 1.875rem;
+            box-shadow: 0 0.3rem 1.25rem rgba(255, 182, 193, 0.3); font-size: 0.8125rem; color: #555;
+            transition: transform 0.3s; z-index: 2000; font-weight: 500;
+            display: flex; align-items: center; gap: 0.375rem;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <div class="back-btn" onclick="closeApp()">←</div>
+        <div class="page-title">字体工作室</div>
+        <div class="right-placeholder"></div>
+    </div>
+
+    <div class="content-area">
+        <div class="white-box control-box">
+            <button class="btn-add" onclick="openModal('modal-add')">
+                <span>+ 添加字体</span>
+            </button>
+            <div class="action-row">
+                <div class="font-selector" onclick="openPresetList()">
+                    <span id="currentFontLabel">系统默认</span>
+                    <span class="caret">▼</span>
+                </div>
+                <button class="icon-btn btn-save" onclick="openSaveModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+                </button>
+                <button class="icon-btn btn-delete" onclick="deleteCurrentPreset()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 字体大小滑动条 -->
+        <div class="white-box size-box">
+            <div class="size-icon small">A</div>
+            <div class="slider-container">
+                <input type="range" id="fontSlider" min="12" max="32" value="16" step="1">
+                <div class="slider-value" id="sizeValueDisplay">16px</div>
+            </div>
+            <div class="size-icon big">A</div>
+        </div>
+
+        <div class="white-box preview-box">
+            <div class="preview-label">Preview</div>
+            <div class="demo-text-wrap" id="demoText">
+                <div class="demo-cn">山有木兮木有枝<br>心悦君兮君不知</div>
+                <div class="demo-en">You are my healing starlight.<br>ABCabc 123</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗们 -->
+    <div class="modal-overlay" id="modal-add">
+        <div class="modal-box">
+            <div class="modal-title">添加网络字体</div>
+            <input type="text" id="inputUrl" class="modal-input" placeholder="请粘贴字体链接 (URL)" spellcheck="false">
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal('modal-add')">取消</button>
+                <button class="modal-btn btn-confirm" onclick="previewUrlFont()">预览</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-save">
+        <div class="modal-box">
+            <div class="modal-title">保存为预设</div>
+            <input type="text" id="inputName" class="modal-input" placeholder="给字体起个名字..." autocomplete="off">
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal('modal-save')">取消</button>
+                <button class="modal-btn btn-confirm" onclick="confirmSavePreset()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-list">
+        <div class="modal-box">
+            <div class="modal-title">选择字体预设</div>
+            <div class="preset-list" id="presetListContainer"></div>
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeModal('modal-list')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">
+        <span id="toastMsg">操作成功</span>
+    </div>
+
+    <script>
+        const KEY_PRESETS = 'healing_font_presets';
+        const KEY_ACTIVE = 'healing_active_font';
+
+        // 默认预设
+        const DEFAULT_PRESET = { id: 'default', name: '系统默认', url: '', size: 16 };
+
+        let presets = [ DEFAULT_PRESET ];
+        let activeFont = DEFAULT_PRESET;
+
+        // 获取元素
+        const currentFontLabel = document.getElementById('currentFontLabel');
+        const demoText = document.getElementById('demoText');
+        const inputUrl = document.getElementById('inputUrl');
+        const inputName = document.getElementById('inputName');
+        const presetListContainer = document.getElementById('presetListContainer');
+        const fontSlider = document.getElementById('fontSlider');
+        const sizeValueDisplay = document.getElementById('sizeValueDisplay');
+
+        window.onload = async function() { 
+            // 1. 加载预设
+            let savedPresets = await localforage.getItem(KEY_PRESETS);
+            if(savedPresets) {
+                // 【修复】如果读出来是字符串，先转成对象
+                if (typeof savedPresets === 'string') {
+                    try { savedPresets = JSON.parse(savedPresets); } catch(e) {}
+                }
+                
+                presets = savedPresets; 
+                
+                // 确保它是数组，否则重置（防止报错）
+                if (!Array.isArray(presets)) presets = [DEFAULT_PRESET];
+
+                if(!presets.find(p => p.id === 'default')) {
+                    presets.unshift(DEFAULT_PRESET);
+                }
+            }
+            
+            // 2. 加载当前活动字体
+            let savedActive = await localforage.getItem(KEY_ACTIVE);
+            if(savedActive) {
+                // 【修复】如果读出来是字符串，先转成对象
+                if (typeof savedActive === 'string') {
+                    try { savedActive = JSON.parse(savedActive); } catch(e) {}
+                }
+                activeFont = savedActive;
+            }
+
+            // 3. 监听滑块 (关键修复点)
+            if(fontSlider) {
+                fontSlider.addEventListener('input', function() {
+                    const val = parseInt(this.value);
+                    
+                    // 界面更新
+                    sizeValueDisplay.innerText = val + 'px';
+                    
+                    // 【核心修复】：直接设置当前 App 页面的根字体大小
+                    // 因为上面的 CSS 已经全部换成了 rem，所以这里一改，整个页面所有元素都会缩放
+                    document.documentElement.style.fontSize = val + 'px';
+
+                    // 预览区文字大小无需单独设置了，因为它也是 rem 单位的 (1.625em)
+                    
+                    // 数据更新
+                    activeFont.size = val;
+                    
+                    // 通知主页
+                    notifyGlobalFontUpdate();
+                });
+            }
+
+            updateUI();
+        };
+
+        function closeApp() {
+            if (window.parent && window.parent.closeApp) window.parent.closeApp();
+            else history.back();
+        }
+
+        // --- 核心逻辑 ---
+
+        function updateUI() {
+            currentFontLabel.innerText = activeFont.name;
+
+            // 1. 设置滑块
+            const currentSize = activeFont.size || 16; 
+            if (fontSlider) fontSlider.value = currentSize;
+            if (sizeValueDisplay) sizeValueDisplay.innerText = currentSize + 'px';
+            
+            // 【核心修复】：应用字号到根节点
+            document.documentElement.style.fontSize = currentSize + 'px';
+
+            // 2. 加载字体文件
+            if (activeFont.url) {
+                loadAndApplyFontLocal(activeFont.name, activeFont.url);
+            } else {
+                demoText.style.fontFamily = 'inherit';
+            }
+
+            // 3. 通知主页
+            notifyGlobalFontUpdate();
+        }
+
+        async function notifyGlobalFontUpdate() { // 1. 加 async
+    // 保存到 LocalStorage (实际是 IndexedDB)
+    await localforage.setItem(KEY_ACTIVE, activeFont); 
+
+    new BroadcastChannel('buzzy_sync_channel').postMessage({ type: 'font_update' });
+            
+            // 直接调用父级函数
+            if (window.parent && window.parent.reloadGlobalFont) {
+                window.parent.reloadGlobalFont();
+            }
+        }
+
+        async function loadAndApplyFontLocal(name, url) {
+            const fontFaceName = 'PreviewFont_' + Date.now();
+            try {
+                const fontFace = new FontFace(fontFaceName, `url(${url})`);
+                await fontFace.load();
+                document.fonts.add(fontFace);
+                demoText.style.fontFamily = fontFaceName;
+            } catch(e) {
+                showToast('无法预览该字体', true);
+                demoText.style.fontFamily = 'inherit';
+            }
+        }
+
+        // 预览
+        function previewUrlFont() {
+            const url = inputUrl.value.trim();
+            if(!url) return;
+            const currentSize = fontSlider ? parseInt(fontSlider.value) : 16;
+            activeFont = { id: 'temp', name: '未保存预览', url: url, size: currentSize };
+            updateUI();
+            closeModal('modal-add');
+            inputUrl.value = '';
+        }
+
+        // 保存
+        function openSaveModal() {
+            if(!activeFont.url) return showToast('默认字体无需保存', true);
+            openModal('modal-save');
+            inputName.focus();
+        }
+
+        async function confirmSavePreset() {
+            const name = inputName.value.trim();
+            if(!name) return;
+            
+            const currentSize = parseInt(fontSlider.value);
+            const newPreset = { 
+                id: Date.now().toString(), 
+                name: name, 
+                url: activeFont.url,
+                size: currentSize 
+            };
+            presets.push(newPreset);
+            await localforage.setItem(KEY_PRESETS, presets);
+            
+            activeFont = newPreset;
+            updateUI();
+            closeModal('modal-save');
+            inputName.value = '';
+            showToast('保存成功');
+        }
+
+        // 列表
+        function openPresetList() {
+            presetListContainer.innerHTML = '';
+            presets.forEach(p => {
+                const item = document.createElement('div');
+                item.className = `preset-item ${activeFont.id === p.id ? 'active' : ''}`;
+                item.innerHTML = `<span>${p.name}</span>` + (activeFont.id === p.id ? '<span>●</span>' : '');
+                item.onclick = () => {
+                    activeFont = p;
+                    updateUI();
+                    closeModal('modal-list');
+                };
+                presetListContainer.appendChild(item);
+            });
+            openModal('modal-list');
+        }
+
+        // 删除
+        async function deleteCurrentPreset() {
+            if(activeFont.id === 'default' || !activeFont.url) {
+                return showToast('系统默认字体无法删除', true);
+            }
+
+            presets = presets.filter(p => p.id !== activeFont.id);
+            await localforage.setItem(KEY_PRESETS, presets);
+
+            activeFont = presets[0]; 
+            updateUI();
+            showToast('预设已删除');
+        }
+
+        function openModal(id) { document.getElementById(id).style.display='flex'; setTimeout(()=>document.getElementById(id).classList.add('show'),10); }
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); setTimeout(()=>document.getElementById(id).style.display='none',300); }
+        function showToast(msg, isError) {
+            const t = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            t.style.color = isError ? '#ff6b6b' : '#555';
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+    </script>
+</body>
+</html>
